@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sws-config"
+version = "0.1.0"
+description = "Minimal pythonic config library for deep learning experiments"
+requires-python = ">=3.8"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Lucas Beyer" },
+  { name = "OpenAI Assistant" }
+]
+dependencies = []
+keywords = ["config", "configuration", "deep learning", "experiments", "cli"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/lucasb-eyer/sws"
+Repository = "https://github.com/lucasb-eyer/sws"
+
+[tool.hatch.build.targets.sdist]
+include = ["sws", "examples", "tests", "pyproject.toml", "README.md", "LICENSE"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["sws"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
