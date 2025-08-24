@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov
+
+      - name: Run tests (no coverage)
+        if: matrix.python-version != '3.12'
+        run: pytest -q
+
+      - name: Run tests with coverage (3.12)
+        if: matrix.python-version == '3.12'
+        run: pytest --cov=sws --cov-report=xml -q
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: py3.12
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true

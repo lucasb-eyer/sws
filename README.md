@@ -1,5 +1,8 @@
 # sws
 
+[![Tests](https://github.com/lucasb-eyer/sws/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/lucasb-eyer/sws/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/lucasb-eyer/sws/branch/master/graph/badge.svg)](https://codecov.io/gh/lucasb-eyer/sws)
+
 Minimal, predictable, footgun-free configuration for deep learning experiments.
 If you want some lore, have a look at the end.
 

@@ -51,3 +51,9 @@ packages = ["sws"]
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+omit = ["sws/simpleeval.py"]
+
+[tool.coverage.report]
+omit = ["sws/simpleeval.py"]
