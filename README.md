@@ -210,3 +210,6 @@ I refuse to built around types in Python, like pydantic, tyro, dataclasses, ...,
 Finally, I haven't used, but thoroughly read [Pydra](https://github.com/jordan-benjamin/pydra)
 and [Cue](https://cuelang.org/docs/tour/), which together inspired the two-step
 approach with finalization.
+
+Why is it called `sws`? It's a nod to OpenAI's `chz` config library,
+and the author being a very fond resident of Switzerland.
