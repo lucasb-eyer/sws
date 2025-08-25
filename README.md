@@ -4,6 +4,10 @@
 [![codecov](https://codecov.io/gh/lucasb-eyer/sws/branch/master/graph/badge.svg)](https://codecov.io/gh/lucasb-eyer/sws)
 
 Minimal, predictable, footgun-free configuration for deep learning experiments.
+The most similar existing ones are
+[OmegaConf](https://omegaconf.readthedocs.io/en/2.3_branch/usage.html) and
+[ConfigDict](https://github.com/google/ml_collections) -
+if you are happy with them, you probably don't need this.
 If you want some lore, have a look at the end.
 
 The remainder of this readme follows the CODE THEN EXPLAIN layout.
