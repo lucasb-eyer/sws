@@ -92,7 +92,7 @@ class Config(_BaseView):
     """
 
     def __init__(self, *, _store=None, _prefix="", **kw):
-        object.__setattr__(self, "_store", _store or {})
+        object.__setattr__(self, "_store", _store if _store is not None else {})
         object.__setattr__(self, "_prefix", _prefix or "")
 
         # initialize from kwargs
@@ -100,6 +100,9 @@ class Config(_BaseView):
             self._assign(self._full(k), v)
 
     def _assign_leaf(self, full, value):
+        if isinstance(value, (_BaseView, _ResolvedView)):  # That'd be weird...
+            raise TypeError("Cannot assign view to a field; use plain values.")
+
         # Forbid assigning a leaf where a group exists
         if any(k.startswith(full + ".") for k in self._store):
             raise ValueError(f"Cannot set leaf '{full}': group with same name exists")

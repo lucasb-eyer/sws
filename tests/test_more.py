@@ -68,3 +68,15 @@ def test_overrides_boolean_and_list_eval():
     base = sws.Config(flag=False, lst=[1])
     f = base.finalize(["flag=True", "lst=[1,2,3]"])
     assert f.flag is True and f.lst == (1, 2, 3)
+
+
+def test_bug1():
+    c = sws.Config()
+    with pytest.raises(TypeError):
+        c.a = c.b
+
+
+def test_bug2():
+    c = sws.Config()
+    c.a.b = 3
+    assert c.finalize().to_dict() == dict(a=dict(b=3))
