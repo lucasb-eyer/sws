@@ -1,10 +1,10 @@
 import pytest
 import sws
-from sws import Config, lazy
+from sws import Config
 
 
 def test_simple():
-    c = Config(lr=0.1, wd=lazy(lambda c: c.lr * 0.5))
+    c = Config(lr=0.1, wd=lambda c: c.lr * 0.5)
     f = c.finalize()
     assert f.wd == pytest.approx(0.05)
 
@@ -19,8 +19,8 @@ def test_simple():
 
 def test_computed_nested_and_root():
     c = Config(
-        model={"lr": 1e-3, "wd": lazy(lambda c: c.lr * 0.5)},
-        optimizer={"wd": lazy(lambda c: c.root.model.lr * 0.1)},
+        model={"lr": 1e-3, "wd": lambda c: c.lr * 0.5},
+        optimizer={"wd": lambda c: c.root.model.lr * 0.1},
     )
     f = c.finalize()
     assert f.model.wd == pytest.approx(5e-4)
@@ -28,7 +28,7 @@ def test_computed_nested_and_root():
 
 
 def test_computed_containers_and_freeze():
-    c = Config(lr=3, aug=[1, lazy(lambda c: c.lr * 2)])
+    c = Config(lr=3, aug=[1, lambda c: c.lr * 2])
     f = c.finalize()
     assert isinstance(f.aug, tuple)
     assert f.aug == (1, 6)
@@ -44,8 +44,8 @@ def test_computed_containers_and_freeze():
 
 def test_cycle_detection():
     c = Config(
-        a=lazy(lambda c: c.b),
-        b=lazy(lambda c: c.a),
+        a=lambda c: c.b,
+        b=lambda c: c.a,
     )
     with pytest.raises(sws.CycleError):
         c.finalize()
@@ -98,4 +98,3 @@ def test_overrides_expressions_with_c_view():
     # Order matters: left-to-right application of overrides
     f2 = base.finalize(["foo=c.lr", "lr=3", "bar=c.lr"])
     assert f2.foo == 1.0 and f2.bar == 3
-

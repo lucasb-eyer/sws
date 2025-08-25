@@ -1,4 +1,4 @@
-from sws import Config, lazy
+from sws import Config
 
 
 def get_config():
@@ -6,6 +6,5 @@ def get_config():
     c.lr = 0.1
     c.model.width = 128
     c.model.depth = 4
-    c.wd = lazy(lambda c: c.lr * 0.1)
+    c.wd = lambda c: c.lr * 0.1
     return c
-

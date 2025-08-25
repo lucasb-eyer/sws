@@ -5,8 +5,8 @@ import sws
 def test_finalize_tuple_and_set_freezing():
     c = sws.Config(
         a=2,
-        t=(1, sws.lazy(lambda c: c.a + 1)),
-        s={1, sws.lazy(lambda c: c.a)},
+        t=(1, lambda c: c.a + 1),
+        s={1, lambda c: c.a},
     )
     f = c.finalize()
     assert isinstance(f.t, tuple)
@@ -18,7 +18,7 @@ def test_finalize_tuple_and_set_freezing():
 def test_finalize_mapping_in_container_raises():
     c = sws.Config(
         a=1,
-        bad=[sws.lazy(lambda c: {"k": c.a})],
+        bad=[lambda c: {"k": c.a}],
     )
     with pytest.raises(sws.FinalizeError):
         c.finalize()
@@ -56,7 +56,7 @@ def test_delete_via_subview_and_contains_on_view():
 
 
 def test_finalize_missing_key_error_message():
-    c = sws.Config(x=sws.lazy(lambda c: c.y))
+    c = sws.Config(x=lambda c: c.y)
     with pytest.raises(sws.FinalizeError) as ei:
         c.finalize()
     # Message should indicate missing key path and field name

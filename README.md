@@ -17,16 +17,16 @@ Install instructions at the end.
 ## Basics
 
 ```python
-from sws import Config, lazy
+from sws import Config
 
 # Create the config and populate the fields with defaults
 c = Config()
 c.lr = 3e-4
-c.wd = c.lr * 0.1  # ERROR: c is write-only. Instead, use `lazy`:
-c.wd = lazy(lambda c: c.lr * 0.1)
+c.wd = c.lr * 0.1  # ERROR: c is write-only. Instead, use a callable:
+c.wd = lambda c: c.lr * 0.1
 
 # Alternative convenience for short configs:
-c = Config(lr=3e-4, wd=lazy(lambda c: c.lr * 0.1))
+c = Config(lr=3e-4, wd=lambda c: c.lr * 0.1)
 
 # Finalizing resolves all fields to plain values, and integrates CLI args:
 c = c.finalize(argv=sys.argv[1:])
@@ -36,30 +36,54 @@ train_agi(lr=c.lr, wd=c.wd)
 ```
 
 `sws` clearly separates two phases: config creation, and config use.
-At creation time, you build a (possibly nested) `Config` object, with the option to use `lazy(...)` to make some field's value depend on the values of other fields.
-Then, you `finalize()` the config, which resolves all fields (including `lazy` ones) into plain concrete values.
-If desired, `finalize()` also applies overrides from the commandline.
+At creation time, you build a (possibly nested) `Config` object.
+To avoid subtle bugs common in many config libraries I've used before, at
+creation time, the `Config` object is *write-only*; you cannot read its values.
+Once you finished building it up, a call to `c.finalize()` turns it into a
+read-only `FinalConfig` object that contains "final" values for all fields.
 
-To avoid subtle bugs common in many config libraries I've used before, at creation time, the `Config` object is *write-only*; this forces use of `lazy` references that get correctly resolved later.
-At use-time (after `finalize()`), on the other hand, the `FinalConfig` object is read-only, which again avoids subtle bugs in complex code.
+This *finalization* step can also integrate overrides from, for example,
+commandline arguments; more on that a little later.
+
+If you want to make one field's value depend on another field's value, you can
+do so by assigning a `lambda` to it, which computes the derived value. This
+lambda will be called during finalization, and can access concrete values of
+other config fields via its `c` argument. In this way, in the example above,
+the `wd` setting will use the correct value of `c.lr` even when it is overriden
+by commandline arguments during `finalize`.
+
+Since callable values receive this special treatment, if you want to actually
+set a config field's value to an actual function, that needs to be wrapped by
+`sws.Fn`:
+
+```python
+from sws import Fn
+
+# If you want to store a callable as a value (not execute it at finalize), wrap it:
+c.log_fn = Fn(lambda s: print(s))
+c = c.finalize()
+
+# Five moments later...
+c.log_fn("After finalization, the config field is just this plain function")
+```
 
 ## Nesting
 
 Of course any respectable config library allows nested structures:
 
 ```python
-from sws import Config, lazy
+from sws import Config
 
 # Create the config and populate the fields with defaults
 c = Config()
 c.lr = 3e-4
 c.model.depth = 4  # No need to create parents first.
 
-# In a nested field, lazy's `c` refers to that nesting:
-c.model.width = lazy(lambda c: c.depth * 64)
+# In a nested field, the callable's `c` refers to that nesting:
+c.model.width = lambda c: c.depth * 64
 
 # If you really want top-level, use c.root:
-c.model.emb_lr = lazy(lambda c: c.root.lr * 10)
+c.model.emb_lr = lambda c: c.root.lr * 10
 
 c = c.finalize()
 
@@ -133,12 +157,12 @@ and calls the specified function (in this example, `train`) with the `FinalConfi
 Here's what a config file might look like, let's call it `vit_i1k.py`:
 
 ```python
-from sws import Config, lazy
+from sws import Config
 
 def get_config():
     c = Config()
     c.lr = 3e-4
-    c.wd = lazy(lambda c: c.lr * 0.1)
+    c.wd = lambda c: c.lr * 0.1
     c.model.name = "vit"
     c.model.depth = 8
     c.model.width = 512
@@ -174,7 +198,13 @@ a sweep to run sweeps.
   sets become frozensets, and dicts don't exist.
 - You cannot set a group to a value or vice-versa, i.e. no `c.model = "vit"`
   followed by `c.model.depth = 4` or vice-versa.
-- Cycles in `lazy` values are detected and raise an exception at `finalize`.
+- Cycles in computed callables are detected and raise an exception at `finalize`.
+- Callables are invoked as `callable(c=...)`; so the argument _has_ to be called `c`.
+  This is meant to help catch the mistake of forgetting `Fn(...)` when wanting to
+  assign callables as actual values.
+- I hope to remove this requirement soon, but for now, even during commandline
+  overrides, assigning a callable needs to be `Fn`-wrapped:
+  `'log_fn=Fn(lambda s: print(f"Log: {s}"))'`.
 
 # Installing
 ```bash
@@ -188,12 +218,14 @@ python -m pytest
 
 # TODOs
 
-- Think about values that are lambda's, references to functions, modules, or classes.
-    - Doesn't mean this doesn't work now, just that I haven't thought it through and tested it.
+- When passing commandline args, using lazy/lambda makes no more sense.
+  So we should lift the requirement for `Fn`-wrapping of callables here.
 
 Probably overkill:
 - Auto-generate a commandline --help?
 - Auto-generate a terminal UI to browse/change config values on `finalize()` could be fun.
+- Rewrite the finalization algorithm. It currently is obviously vibe-coded shit;
+  it's correct, but way over-complicated and could be much simpler.
 
 # Lore
 

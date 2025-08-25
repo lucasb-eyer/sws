@@ -10,17 +10,10 @@ class CycleError(FinalizeError):
     pass
 
 
-class Computed:
+class Fn:
+    """Wrapper to store a callable as a plain value."""
     def __init__(self, fn):
         self.fn = fn
-
-    def __repr__(self) -> str:
-        name = getattr(self.fn, "__name__", None) or "<lambda>"
-        return f"Computed({name})"
-
-
-def lazy(fn):
-    return Computed(fn)
 
 
 class _BaseView:
@@ -101,7 +94,7 @@ class Config(_BaseView):
 
     def _assign_leaf(self, full, value):
         if isinstance(value, (_BaseView, _ResolvedView)):  # That'd be weird...
-            raise TypeError("Cannot assign view to a field; use plain values.")
+            raise TypeError("Cannot assign view to a field; use plain values, dicts, or callables.")
 
         # Forbid assigning a leaf where a group exists
         if any(k.startswith(full + ".") for k in self._store):
@@ -135,7 +128,8 @@ class Config(_BaseView):
     def __getitem__(self, key):
         full = self._full(key)
         if full in self._store:
-            raise TypeError("Config is write-only; use lazy(...) or finalize() to read")
+            raise TypeError("Config is write-only; use finalize() to read, "
+                            "or assign a callable for lazy evaluation.")
         return Config(_store=self._store, _prefix=full + ".")
 
     def __setitem__(self, key, value):
@@ -158,20 +152,21 @@ class Config(_BaseView):
           the original builder) and resolve only leaf keys that exist in the flat
           store. All nested mappings were already flattened on assignment.
         - Provide a resolver function `_resolve(full)` that lazily resolves a leaf
-          with memoization and cycle detection. If a value is `Computed`, call it
-          with a read-only `_ResolvedView` rooted at the leaf's parent so computed
-          functions can reference siblings (via the view) or the full tree (via
-          `view.root`). Any `Computed` results inside containers are recursively
-          resolved.
+          with memoization and cycle detection. Any callable value (not wrapped by
+          `Fn`) is treated as computed and is executed with a single keyword
+          argument `c`, a read-only `_ResolvedView` rooted at the leaf's parent so
+          computed callables can reference siblings (via the view) or the full tree
+          (via `view.root`). Callables inside containers are recursively resolved
+          the same way. To store callables as values, wrap them in `Fn(...)`.
         - Freeze containers: lists/tuples become tuples, sets become frozensets;
           mappings inside containers are rejected because mappings should have been
           flattened on input. This makes the final config structurally immutable.
         - Apply CLI-style overrides (`argv`) left-to-right onto the snapshot. Only
           tokens of the form `key=value` are considered (others are ignored) and
           values are evaluated as a Python expression using a `_ResolvedView` bound
-          to name `c` so expressions can reference already-resolved values
-          (e.g., `c.model.width`). Between each override, the resolver memo is
-          cleared to reflect the new state.
+          to name `c` and the `Fn` class so expressions can reference/rescue
+          callables. Between each override, the resolver memo is cleared to reflect
+          the new state.
         - Finally, iterate over all leaf keys and resolve them through `_resolve`,
           returning a `FinalConfig` holding the resolved flat dict and preserving
           the current prefix for any sub-views created before finalize.
@@ -182,15 +177,40 @@ class Config(_BaseView):
         visiting = {}
         stack = []
 
-        def _deep_resolve_in_containers(value, parent_prefix):
-            # Resolve any Computed that may appear inside container values
-            if isinstance(value, Computed):
+        def _deep_resolve_in_containers(value, parent_prefix, ctx_full=None):
+            # Pass-through for explicit "store callable as value"
+            if isinstance(value, Fn):
+                return value.fn
+            # Auto-resolve any callable by calling with keyword 'c'
+            if callable(value):
                 view = _ResolvedView(store, _resolve, parent_prefix)
-                return _deep_resolve_in_containers(value.fn(view), parent_prefix)
+                try:
+                    result = value(c=view)
+                except CycleError:
+                    raise
+                except TypeError as e:
+                    target = ctx_full or (parent_prefix[:-1] if parent_prefix.endswith(".") else parent_prefix or "<root>")
+                    raise FinalizeError(
+                        f"Callable assigned to '{target}' must accept keyword argument 'c'; wrap with sws.Fn(...) to store it as a value"
+                    ) from e
+                except AttributeError as e:
+                    raise FinalizeError(
+                        f"Missing key {e.args[0]!r} while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}'"
+                    ) from e
+                except KeyError as e:
+                    raise FinalizeError(
+                        f"Missing key {e.args[0]!r} while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}'"
+                    ) from e
+                except Exception as e:  # pragma: no cover - general safety
+                    raise FinalizeError(
+                        f"Error while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}': {e}"
+                    ) from e
+                return _deep_resolve_in_containers(result, parent_prefix, ctx_full)
+            # Containers: resolve and freeze
             if isinstance(value, (list, tuple)):
-                return tuple(_deep_resolve_in_containers(v, parent_prefix) for v in value)
+                return tuple(_deep_resolve_in_containers(v, parent_prefix, ctx_full) for v in value)
             if isinstance(value, set):
-                return frozenset(_deep_resolve_in_containers(v, parent_prefix) for v in value)
+                return frozenset(_deep_resolve_in_containers(v, parent_prefix, ctx_full) for v in value)
             # Dict leaves should not occur (assigning Mapping flattens)
             if isinstance(value, Mapping):
                 raise FinalizeError("Mapping encountered at leaf during finalize")
@@ -209,28 +229,8 @@ class Config(_BaseView):
             stack.append(full)
             try:
                 val = store[full]
-                if isinstance(val, Computed):
-                    parent = full.rsplit(".", 1)[0] + "." if "." in full else ""
-                    view = _ResolvedView(store, _resolve, parent)
-                    try:
-                        out = val.fn(view)
-                    except CycleError:
-                        # Preserve cycle errors without wrapping so callers can assert on type
-                        raise
-                    except AttributeError as e:
-                        # Treat missing attribute access the same as missing key for clarity
-                        raise FinalizeError(
-                            f"Missing key {e.args[0]!r} while resolving '{full}'"
-                        ) from e
-                    except KeyError as e:
-                        raise FinalizeError(
-                            f"Missing key {e.args[0]!r} while resolving '{full}'"
-                        ) from e
-                    except Exception as e:  # pragma: no cover - general safety
-                        raise FinalizeError(f"Error while resolving '{full}': {e}") from e
-                    out = _deep_resolve_in_containers(out, parent)
-                else:
-                    out = _deep_resolve_in_containers(val, full.rsplit(".", 1)[0] + "." if "." in full else "")
+                parent = full.rsplit(".", 1)[0] + "." if "." in full else ""
+                out = _deep_resolve_in_containers(val, parent, full)
                 memo[full] = out
                 return out
             finally:
@@ -252,7 +252,10 @@ class Config(_BaseView):
             # Ensure fresh resolution per assignment (clear memo/cache)
             memo.clear(); visiting.clear(); stack.clear()
             try:
-                evaluated = EvalWithCompoundTypes(names={"c": _ResolvedView(store, _resolve, "")}).eval(val)
+                evaluated = EvalWithCompoundTypes(names={
+                    "c": _ResolvedView(store, _resolve, ""),
+                    "Fn": Fn,
+                }).eval(val)
             except Exception:
                 evaluated = val
             cfg[key] = evaluated
@@ -264,7 +267,7 @@ class Config(_BaseView):
 class _ResolvedView:
     """Read-only resolver view with prefix semantics like Config.
 
-    Used inside Computed lambdas. Attribute/item access triggers resolution
+    Used inside computed callables. Attribute/item access triggers resolution
     of leaves or returns a nested _ResolvedView for groups. Provides `root`
     to jump to the top-level.
     """
