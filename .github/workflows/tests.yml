@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,18 +30,18 @@ jobs:
           pip install pytest pytest-cov
 
       - name: Run tests (no coverage)
-        if: matrix.python-version != '3.12'
+        if: matrix.python-version != '3.13'
         run: pytest -q
 
-      - name: Run tests with coverage (3.12)
-        if: matrix.python-version == '3.12'
+      - name: Run tests with coverage (3.13)
+        if: matrix.python-version == '3.13'
         run: pytest --cov=sws --cov-report=xml -q
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
-          flags: py3.12
+          flags: py3.13
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
