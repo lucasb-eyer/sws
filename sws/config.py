@@ -238,16 +238,22 @@ class Config(_BaseView):
                 visiting.pop(full, None)
 
         # Apply overrides if provided: only `key=value` tokens are processed.
-        cfg = Config(_store=store)
         for token in list(argv or []):
             if "=" not in token:
                 continue
-            key, val = token.split("=", 1)
-            if key not in cfg:
-                raise AttributeError(key)
-            # Disallow assigning to a group without reading via cfg[key]
-            if any(k.startswith(key + ".") for k in store):
-                raise AttributeError(f"{key!r} is a group; set leaves like {key}.<name>")
+            suffix, val = token.split("=", 1)
+
+            # Find the keys which have this suffix. If multiple, provide error.
+            suffix = suffix.removeprefix("c.")
+            matches = [k for k in store if k.endswith(suffix)]
+            if not matches:
+                raise AttributeError(suffix)
+            if len(matches) > 1:  # Ambiguous suffix; help user disambiguate
+                raise AttributeError(
+                    f"Ambiguous override key {suffix!r}; candidates:\n"
+                    + '\n'.join(sorted(matches)))
+            key = matches[0]
+
             # Evaluate value with access to current resolved view via 'c'
             # Ensure fresh resolution per assignment (clear memo/cache)
             memo.clear(); visiting.clear(); stack.clear()
@@ -258,7 +264,8 @@ class Config(_BaseView):
                 }).eval(val)
             except Exception:
                 evaluated = val
-            cfg[key] = evaluated
+
+            store[key] = evaluated
 
         # Only resolve leaves (keys present in the flat store)
         return FinalConfig(_store={k: _resolve(k) for k in store}, _prefix=self._prefix)

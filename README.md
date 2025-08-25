@@ -109,7 +109,11 @@ The `finalize()` method allows you to pass a list of `argv` strings to it that s
 from sws import Config
 
 c = Config(lr=1.0, model={"width": 128, "depth": 4})
-c = c.finalize(["model.width=512", "model.depth=2+2"])
+c = c.finalize(["c.model.width=512", "c.model.depth=2+2"])
+
+# However, we're lazy. The shortest unique suffix works:
+c = c.finalize(["width=512", "depth=2+2"])
+# (dth=512, pth=2+2 also work but are unreadable, don't be insane!)
 
 # In real life, you'd probably pass sys.argv[1:] instead.
 ```
@@ -120,9 +124,12 @@ This is to reduce ambiguity and allow catching typos.
 The values of the overrides are parsed as Python expressions using the `simpleeval`
 library. This makes a lot of Python code just work, for example you can write
 `model.vocab=[ord(c) for c in "hello"]` and it'll work. You can also access the
-current config using the name `c`, so something like `'model.width=3 * c.model.depth'`
+current config using the name `c`, so something like `'c.model.width=3 * c.model.depth'`
 works. Note that I quoted the whole thing, for two reasons: (1) to stop my shell
 from interpreting `*` as wildcard, and (2) because I used spaces.
+
+For convenience, the keyname can be shortened to the shortest unique suffix
+across the _whole_ config (i.e. all nesting levels).
 
 ## `sws.run` and suggested code structure
 

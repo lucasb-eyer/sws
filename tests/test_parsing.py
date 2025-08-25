@@ -8,13 +8,35 @@ def test_simple():
     f = c.finalize()
     assert f.wd == pytest.approx(0.05)
 
-    f2 = c.finalize(["lr=10"])  # override lr
+    f2 = c.finalize(["c.lr=10"])  # override lr
     assert f2.lr == 10
     assert f2.wd == 5
 
-    f3 = c.finalize(["lr=10", "wd=0.2"])  # explicit wd suppresses computed
+    f3 = c.finalize(["c.lr=10", "c.wd=0.2"])  # explicit wd suppresses computed
     assert f3.lr == 10
     assert f3.wd == pytest.approx(0.2)
+
+
+def test_suffix():
+    c = Config()
+    c.simple = 33
+    c.thingy.lr = 0.1
+    c.model.head.lr = 10
+    c.model.head.params.voc = 15
+
+    assert c.finalize(["c.simple=99"]).simple == 99
+    assert c.finalize(["simple=99"]).simple == 99
+    assert c.finalize(["ple=99"]).simple == 99
+    assert c.finalize(["voc=99"]).model.head.params.voc == 99
+
+    f = c.finalize(["head.lr=99"])
+    assert f.thingy.lr == 0.1
+    assert f.model.head.lr == 99
+
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["lr=10"])
+    assert "model.head.lr" in str(e.value)
+    assert "thingy.lr" in str(e.value)
 
 
 def test_computed_nested_and_root():
