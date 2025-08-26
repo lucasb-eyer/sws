@@ -245,7 +245,7 @@ class Config(_BaseView):
 
             # Find the keys which have this suffix. If multiple, provide error.
             suffix = suffix.removeprefix("c.")
-            matches = [k for k in store if k.endswith(suffix)]
+            matches = [k for k in store if ("." + k).endswith("." + suffix)]
             if not matches:
                 raise AttributeError(suffix)
             if len(matches) > 1:  # Ambiguous suffix; help user disambiguate

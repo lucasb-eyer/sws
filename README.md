@@ -111,9 +111,8 @@ from sws import Config
 c = Config(lr=1.0, model={"width": 128, "depth": 4})
 c = c.finalize(["c.model.width=512", "c.model.depth=2+2"])
 
-# However, we're lazy. The shortest unique suffix works:
+# However, we're lazy. The shortest unique segment suffix works:
 c = c.finalize(["width=512", "depth=2+2"])
-# (dth=512, pth=2+2 also work but are unreadable, don't be insane!)
 
 # In real life, you'd probably pass sys.argv[1:] instead.
 ```
@@ -130,6 +129,7 @@ from interpreting `*` as wildcard, and (2) because I used spaces.
 
 For convenience, the keyname can be shortened to the shortest unique suffix
 across the _whole_ config (i.e. all nesting levels).
+For example, `model.head.lr` can be shortened to `head.lr` or `lr` if unambiguous.
 
 ## `sws.run` and suggested code structure
 

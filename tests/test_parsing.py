@@ -26,8 +26,10 @@ def test_suffix():
 
     assert c.finalize(["c.simple=99"]).simple == 99
     assert c.finalize(["simple=99"]).simple == 99
-    assert c.finalize(["ple=99"]).simple == 99
     assert c.finalize(["voc=99"]).model.head.params.voc == 99
+
+    with pytest.raises(AttributeError):
+        c.finalize(["ple=99"]).simple
 
     f = c.finalize(["head.lr=99"])
     assert f.thingy.lr == 0.1
