@@ -2,26 +2,15 @@ import pytest
 import sws
 
 
-def test_finalize_tuple_and_set_freezing():
-    c = sws.Config(
-        a=2,
-        t=(1, lambda c: c.a + 1),
-        s={1, lambda c: c.a},
-    )
+def test_finalize_tuple_and_set():
+    c = sws.Config(a=2)
+    c.t = lambda: (1, c.a + 1)
+    c.s = lambda: {1, c.a}
     f = c.finalize()
     assert isinstance(f.t, tuple)
     assert f.t == (1, 3)
-    assert isinstance(f.s, frozenset)
-    assert f.s == frozenset({1, 2})
-
-
-def test_finalize_mapping_in_container_raises():
-    c = sws.Config(
-        a=1,
-        bad=[lambda c: {"k": c.a}],
-    )
-    with pytest.raises(sws.FinalizeError):
-        c.finalize()
+    assert isinstance(f.s, set)
+    assert f.s == {1, 2}
 
 
 def test_frozen_prefix_view_and_contains():
@@ -55,25 +44,23 @@ def test_delete_via_subview_and_contains_on_view():
     assert "model" not in c and "depth" not in mv
 
 
-def test_finalize_missing_key_error_message():
-    c = sws.Config(x=lambda c: c.y)
-    with pytest.raises(sws.FinalizeError) as ei:
+def test_finalize_missing_key():
+    c = sws.Config()
+    c.x = lambda: c.y
+    with pytest.raises(KeyError):
         c.finalize()
-    # Message should indicate missing key path and field name
-    msg = str(ei.value)
-    assert "Missing key" in msg and "'y'" in msg and "'x'" in msg
 
 
 def test_overrides_boolean_and_list_eval():
     base = sws.Config(flag=False, lst=[1])
     f = base.finalize(["flag=True", "lst=[1,2,3]"])
-    assert f.flag is True and f.lst == (1, 2, 3)
+    assert f.flag is True and f.lst == [1, 2, 3]
 
 
 def test_bug1():
     c = sws.Config()
-    with pytest.raises(TypeError):
-        c.a = c.b
+    c.a = c.b
+    assert c.finalize().to_dict() == {}
 
 
 def test_bug2():

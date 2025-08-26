@@ -4,7 +4,8 @@ from sws import Config
 
 
 def test_simple():
-    c = Config(lr=0.1, wd=lambda c: c.lr * 0.5)
+    c = Config(lr=0.1)
+    c.wd = lambda: c.lr * 0.5
     f = c.finalize()
     assert f.wd == pytest.approx(0.05)
 
@@ -42,20 +43,19 @@ def test_suffix():
 
 
 def test_computed_nested_and_root():
-    c = Config(
-        model={"lr": 1e-3, "wd": lambda c: c.lr * 0.5},
-        optimizer={"wd": lambda c: c.root.model.lr * 0.1},
-    )
+    c = Config()
+    c.model = {"lr": 1e-3, "wd": lambda: c.model.lr * 0.5}
+    c.optim = {"wd": lambda: c.model.lr * 0.1}
     f = c.finalize()
     assert f.model.wd == pytest.approx(5e-4)
-    assert f.optimizer.wd == pytest.approx(1e-4)
+    assert f.optim.wd == pytest.approx(1e-4)
 
 
 def test_computed_containers_and_freeze():
-    c = Config(lr=3, aug=[1, lambda c: c.lr * 2])
+    c = Config(lr=3)
+    c.aug = lambda: [1, c.lr * 2]
     f = c.finalize()
-    assert isinstance(f.aug, tuple)
-    assert f.aug == (1, 6)
+    assert f.aug == [1, 6]
     with pytest.raises(TypeError):
         f["new"] = 1
     with pytest.raises(TypeError):
@@ -67,10 +67,23 @@ def test_computed_containers_and_freeze():
 
 
 def test_cycle_detection():
-    c = Config(
-        a=lambda c: c.b,
-        b=lambda c: c.a,
-    )
+    c = Config()
+    c.a = lambda: c.b
+    c.b = lambda: c.a
+    with pytest.raises(sws.CycleError):
+        c.finalize()
+
+    c = Config()
+    c.a = lambda: c.b
+    c.b = lambda: c.c
+    c.c = lambda: c.a
+    with pytest.raises(sws.CycleError):
+        c.finalize()
+
+    c = Config()
+    c.foo.a = lambda: c.bar.b
+    c.bar.b = lambda: c.baz.c
+    c.baz.c = lambda: c.foo.a
     with pytest.raises(sws.CycleError):
         c.finalize()
 

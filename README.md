@@ -22,11 +22,14 @@ from sws import Config
 # Create the config and populate the fields with defaults
 c = Config()
 c.lr = 3e-4
-c.wd = c.lr * 0.1  # ERROR: c is write-only. Instead, use a callable:
-c.wd = lambda c: c.lr * 0.1
 
-# Alternative convenience for short configs:
-c = Config(lr=3e-4, wd=lambda c: c.lr * 0.1)
+# Alternative shorthand handy for very small configs:
+c = Config(lr=3e-4)
+
+# How to make a field depend on others?
+c.wd = c.lr * 0.1  # ERROR: c is write-only.
+# Instead, use a lambda to make the value "lazy"
+c.wd = lambda: c.lr * 0.1
 
 # Finalizing resolves all fields to plain values, and integrates CLI args:
 c = c.finalize(argv=sys.argv[1:])
@@ -46,11 +49,11 @@ This *finalization* step can also integrate overrides from, for example,
 commandline arguments; more on that a little later.
 
 If you want to make one field's value depend on another field's value, you can
-do so by assigning a `lambda` to it, which computes the derived value. This
-lambda will be called during finalization, and can access concrete values of
-other config fields via its `c` argument. In this way, in the example above,
-the `wd` setting will use the correct value of `c.lr` even when it is overriden
-by commandline arguments during `finalize`.
+do so by wrapping the value in a `lambda`, which computes the derived value.
+This lambda will be called during finalization, where concrete config values
+can be accessed. In this way, in the example above, the `wd` setting will use
+the correct value of `c.lr` even when it is overriden by commandline arguments
+during `finalize`. This works transitively, just as you'd expect it to.
 
 Since callable values receive this special treatment, if you want to actually
 set a config field's value to an actual function, that needs to be wrapped by
@@ -79,11 +82,9 @@ c = Config()
 c.lr = 3e-4
 c.model.depth = 4  # No need to create parents first.
 
-# In a nested field, the callable's `c` refers to that nesting:
-c.model.width = lambda c: c.depth * 64
-
-# If you really want top-level, use c.root:
-c.model.emb_lr = lambda c: c.root.lr * 10
+# In a nested field, lazy and `c` work just as you'd expect them to:
+c.model.width = lambda: c.model.depth * 64
+c.model.emb_lr = lambda: c.lr * 10 / c.model.width
 
 c = c.finalize()
 
@@ -169,7 +170,7 @@ from sws import Config
 def get_config():
     c = Config()
     c.lr = 3e-4
-    c.wd = lambda c: c.lr * 0.1
+    c.wd = lambda: c.lr * 0.1
     c.model.name = "vit"
     c.model.depth = 8
     c.model.width = 512
@@ -201,17 +202,9 @@ a sweep to run sweeps.
 
 - The `FinalConfig` has a nice pretty printer when cast to string or printed.
 - When a dict is assigned to a `Config` field, it's turned into a `Config`.
-- After finalization, values which are collections turn into tuples,
-  sets become frozensets, and dicts don't exist.
 - You cannot set a group to a value or vice-versa, i.e. no `c.model = "vit"`
   followed by `c.model.depth = 4` or vice-versa.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
-- Callables are invoked as `callable(c=...)`; so the argument _has_ to be called `c`.
-  This is meant to help catch the mistake of forgetting `Fn(...)` when wanting to
-  assign callables as actual values.
-- I hope to remove this requirement soon, but for now, even during commandline
-  overrides, assigning a callable needs to be `Fn`-wrapped:
-  `'log_fn=Fn(lambda s: print(f"Log: {s}"))'`.
 
 # Installing
 ```bash
@@ -227,6 +220,10 @@ python -m pytest
 
 - When passing commandline args, using lazy/lambda makes no more sense.
   So we should lift the requirement for `Fn`-wrapping of callables here.
+  `'log_fn=Fn(lambda s: print(f"Log: {s}"))'`.
+- finalization no more converts collections into tuples, sets into frozensets,
+  and expands dicts. If a lazy field returns a dict, it's just a dict.
+  Consider if this is good or bad, though it does sound obscure.
 
 Probably overkill:
 - Auto-generate a commandline --help?

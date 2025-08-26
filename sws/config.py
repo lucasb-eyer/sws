@@ -84,28 +84,32 @@ class Config(_BaseView):
     - Disallows shadowing: a name cannot be both a leaf and a group.
     """
 
-    def __init__(self, *, _store=None, _prefix="", **kw):
-        object.__setattr__(self, "_store", _store if _store is not None else {})
-        object.__setattr__(self, "_prefix", _prefix or "")
+    def __init__(self, **kw):
+        self._store = {}
+        self._prefix = ""
+        self._phase = "building"
+        self._cycle = []
+        self._assign(None, kw)  # Init from kw's.
 
-        # initialize from kwargs
-        for k, v in kw.items():
-            self._assign(self._full(k), v)
+    def _with_prefix(self, prefix):
+        """A shallow copy (sharing store/cycle) with new prefix."""
+        from copy import copy
+        new = copy(self)
+        new._prefix = prefix
+        return new
 
     def _assign_leaf(self, full, value):
-        if isinstance(value, (_BaseView, _ResolvedView)):  # That'd be weird...
-            raise TypeError("Cannot assign view to a field; use plain values, dicts, or callables.")
-
         # Forbid assigning a leaf where a group exists
         if any(k.startswith(full + ".") for k in self._store):
             raise ValueError(f"Cannot set leaf '{full}': group with same name exists")
         self._store[full] = value
 
     def _assign(self, full, value):
-        # Assign value at 'full'; if it's a mapping, flatten under that prefix.
+        # Assign value at 'full'; if it's a mapping/Config, flatten under that prefix.
+        if isinstance(value, _BaseView):
+            value = value.to_dict()
         if isinstance(value, Mapping):
-            # Forbid creating a group where a leaf exists
-            if full in self._store:
+            if full in self._store:  # Forbid creating a group where a leaf exists
                 raise ValueError(f"Cannot set group '{full}': leaf with same name exists")
             for fk, v in _flatten(full, value):
                 self._assign_leaf(fk, v)
@@ -127,10 +131,30 @@ class Config(_BaseView):
     # MutableMapping core
     def __getitem__(self, key):
         full = self._full(key)
-        if full in self._store:
-            raise TypeError("Config is write-only; use finalize() to read, "
-                            "or assign a callable for lazy evaluation.")
-        return Config(_store=self._store, _prefix=full + ".")
+
+        if self._phase == "building":
+            if full in self._store:
+                raise TypeError("Config is write-only; use finalize() to read, "
+                                "or assign a callable for lazy evaluation.")
+            return self._with_prefix(full + ".")
+        elif self._phase == "finalize":
+            if any(k.startswith(full + ".") for k in self._store):
+                return self._with_prefix(full + ".")
+            val = self._store[full]  # This raising KeyError is part of the API.
+            if isinstance(val, Fn):
+                return val.fn
+            if not callable(val):
+                return val
+
+            # val is callable, so it was a lazy. Resolve it, but careful of cycles.
+            self._cycle.append(full)
+            if self._cycle.count(full) > 1:  # Oops, we have a cycle!
+                raise CycleError(f"Cycle detected: {' -> '.join(self._cycle)}")
+            v = val()
+            self._cycle.pop()
+            return v
+        else:
+            assert False, f"Internal bug: {self._phase}"
 
     def __setitem__(self, key, value):
         self._assign(self._full(key), value)
@@ -145,99 +169,12 @@ class Config(_BaseView):
 
     # Finalization to an immutable, resolved config
     def finalize(self, argv=None):
-        """Resolve a write-only builder into an immutable, fully-evaluated config.
-
-        High-level algorithm:
-        - Work on a snapshot of the current flat store (so overrides don't mutate
-          the original builder) and resolve only leaf keys that exist in the flat
-          store. All nested mappings were already flattened on assignment.
-        - Provide a resolver function `_resolve(full)` that lazily resolves a leaf
-          with memoization and cycle detection. Any callable value (not wrapped by
-          `Fn`) is treated as computed and is executed with a single keyword
-          argument `c`, a read-only `_ResolvedView` rooted at the leaf's parent so
-          computed callables can reference siblings (via the view) or the full tree
-          (via `view.root`). Callables inside containers are recursively resolved
-          the same way. To store callables as values, wrap them in `Fn(...)`.
-        - Freeze containers: lists/tuples become tuples, sets become frozensets;
-          mappings inside containers are rejected because mappings should have been
-          flattened on input. This makes the final config structurally immutable.
-        - Apply CLI-style overrides (`argv`) left-to-right onto the snapshot. Only
-          tokens of the form `key=value` are considered (others are ignored) and
-          values are evaluated as a Python expression using a `_ResolvedView` bound
-          to name `c` and the `Fn` class so expressions can reference/rescue
-          callables. Between each override, the resolver memo is cleared to reflect
-          the new state.
-        - Finally, iterate over all leaf keys and resolve them through `_resolve`,
-          returning a `FinalConfig` holding the resolved flat dict and preserving
-          the current prefix for any sub-views created before finalize.
-        """
-        store = dict(self._store)  # snapshot we can mutate with overrides
-
-        memo = {}
-        visiting = {}
-        stack = []
-
-        def _deep_resolve_in_containers(value, parent_prefix, ctx_full=None):
-            # Pass-through for explicit "store callable as value"
-            if isinstance(value, Fn):
-                return value.fn
-            # Auto-resolve any callable by calling with keyword 'c'
-            if callable(value):
-                view = _ResolvedView(store, _resolve, parent_prefix)
-                try:
-                    result = value(c=view)
-                except CycleError:
-                    raise
-                except TypeError as e:
-                    target = ctx_full or (parent_prefix[:-1] if parent_prefix.endswith(".") else parent_prefix or "<root>")
-                    raise FinalizeError(
-                        f"Callable assigned to '{target}' must accept keyword argument 'c'; wrap with sws.Fn(...) to store it as a value"
-                    ) from e
-                except AttributeError as e:
-                    raise FinalizeError(
-                        f"Missing key {e.args[0]!r} while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}'"
-                    ) from e
-                except KeyError as e:
-                    raise FinalizeError(
-                        f"Missing key {e.args[0]!r} while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}'"
-                    ) from e
-                except Exception as e:  # pragma: no cover - general safety
-                    raise FinalizeError(
-                        f"Error while resolving '{ctx_full or (parent_prefix[:-1] if parent_prefix.endswith('.') else parent_prefix or '<root>')}': {e}"
-                    ) from e
-                return _deep_resolve_in_containers(result, parent_prefix, ctx_full)
-            # Containers: resolve and freeze
-            if isinstance(value, (list, tuple)):
-                return tuple(_deep_resolve_in_containers(v, parent_prefix, ctx_full) for v in value)
-            if isinstance(value, set):
-                return frozenset(_deep_resolve_in_containers(v, parent_prefix, ctx_full) for v in value)
-            # Dict leaves should not occur (assigning Mapping flattens)
-            if isinstance(value, Mapping):
-                raise FinalizeError("Mapping encountered at leaf during finalize")
-            return value
-
-        def _resolve(full):
-            if full in memo:
-                return memo[full]
-            if visiting.get(full):
-                cycle = " -> ".join(stack + [full])
-                raise CycleError(f"Cycle detected: {cycle}")
-            if full not in store:
-                # Not a leaf; allow resolution only for existing groups via views
-                raise KeyError(full)
-            visiting[full] = 1
-            stack.append(full)
-            try:
-                val = store[full]
-                parent = full.rsplit(".", 1)[0] + "." if "." in full else ""
-                out = _deep_resolve_in_containers(val, parent, full)
-                memo[full] = out
-                return out
-            finally:
-                stack.pop()
-                visiting.pop(full, None)
+        """Resolve a write-only builder into an immutable, fully-evaluated config."""
+        assert not self._prefix, "Call `finalize` on the top-level config."
+        self._phase = "finalize"
 
         # Apply overrides if provided: only `key=value` tokens are processed.
+        evaluator = EvalWithCompoundTypes(names={"c": self, "Fn": Fn})
         for token in list(argv or []):
             if "=" not in token:
                 continue
@@ -245,7 +182,7 @@ class Config(_BaseView):
 
             # Find the keys which have this suffix. If multiple, provide error.
             suffix = suffix.removeprefix("c.")
-            matches = [k for k in store if ("." + k).endswith("." + suffix)]
+            matches = [k for k in self._store if ("." + k).endswith("." + suffix)]
             if not matches:
                 raise AttributeError(suffix)
             if len(matches) > 1:  # Ambiguous suffix; help user disambiguate
@@ -254,59 +191,19 @@ class Config(_BaseView):
                     + '\n'.join(sorted(matches)))
             key = matches[0]
 
-            # Evaluate value with access to current resolved view via 'c'
-            # Ensure fresh resolution per assignment (clear memo/cache)
-            memo.clear(); visiting.clear(); stack.clear()
             try:
-                evaluated = EvalWithCompoundTypes(names={
-                    "c": _ResolvedView(store, _resolve, ""),
-                    "Fn": Fn,
-                }).eval(val)
-            except Exception:
-                evaluated = val
+                self._store[key] = evaluator.eval(val)
+            except Exception:  # Assume it's a non-quoted string
+                self._store[key] = val
 
-            store[key] = evaluated
+        # Now go over all items and resolve those that were lazy.
+        finalized_store = {k: self[k] for k in self._store}
 
-        # Only resolve leaves (keys present in the flat store)
-        return FinalConfig(_store={k: _resolve(k) for k in store}, _prefix=self._prefix)
-
-
-class _ResolvedView:
-    """Read-only resolver view with prefix semantics like Config.
-
-    Used inside computed callables. Attribute/item access triggers resolution
-    of leaves or returns a nested _ResolvedView for groups. Provides `root`
-    to jump to the top-level.
-    """
-
-    def __init__(self, store, resolve, prefix=""):
-        object.__setattr__(self, "_store", store)
-        object.__setattr__(self, "_resolve", resolve)
-        object.__setattr__(self, "_prefix", prefix)
-
-    @property
-    def root(self):
-        return _ResolvedView(self._store, self._resolve, "")
-
-    def _full(self, key):
-        return f"{self._prefix}{key}" if self._prefix else str(key)
-
-    def __getattr__(self, name):
-        if name.startswith("_"):
-            raise AttributeError(name)
-        try:
-            return self[name]
-        except KeyError as e:
-            raise AttributeError(name) from e
-
-    def __getitem__(self, key):
-        full = self._full(key)
-        if full in self._store:
-            return self._resolve(full)
-        prefix = full + "."
-        if any(k.startswith(prefix) for k in self._store):
-            return _ResolvedView(self._store, self._resolve, prefix)
-        raise KeyError(key)
+        self._phase = "building"
+        return FinalConfig(
+            _store=finalized_store,
+            _prefix=self._prefix
+        )
 
 
 class FinalConfig(_BaseView):
