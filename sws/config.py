@@ -260,14 +260,6 @@ class FinalConfig(_BaseView):
         def _fmt_val(v):
             if isinstance(v, float):
                 return f"{v:.8g}"
-            if isinstance(v, tuple):
-                inner = ", ".join(_fmt_val(x) for x in v)
-                if len(v) == 1:
-                    inner += ","
-                return f"({inner})"
-            if isinstance(v, frozenset):
-                items = sorted((_fmt_val(x) for x in v), key=str)
-                return "{" + ", ".join(items) + "}"
             return repr(v)
 
         def _bold(s: str) -> str:

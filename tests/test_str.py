@@ -2,7 +2,7 @@ import sws
 
 
 def test_finalconfig_str_pretty_colors_and_formatting():
-    c = sws.Config(lr=3, model={"width": 128, "depth": 4})
+    c = sws.Config(lr=3, model={"width": 128, "depth": 4, "mup": 0.3})
     f = c.finalize()
     s = str(f)
 
@@ -16,6 +16,7 @@ def test_finalconfig_str_pretty_colors_and_formatting():
     expected_lines = [
         f"{BOLD}lr{RST}: {BLUE}3{RST}",
         f"{DIM}model.{RST}{BOLD}depth{RST}: {BLUE}4{RST}",
+        f"{DIM}model.{RST}{BOLD}mup{RST}: {BLUE}0.3{RST}",
         f"{DIM}model.{RST}{BOLD}width{RST}: {BLUE}128{RST}",
     ]
     assert s.splitlines() == expected_lines

@@ -67,3 +67,55 @@ def test_bug2():
     c = sws.Config()
     c.a.b = 3
     assert c.finalize().to_dict() == dict(a=dict(b=3))
+
+
+def test_fn_wraps_callable_as_value():
+    c = sws.Config()
+
+    def greet(name):
+        return f"hi {name}"
+
+    # Store callable as a plain value via Fn wrapper
+    c.greet = sws.Fn(greet)
+    f = c.finalize()
+
+    assert callable(f.greet)
+    assert f.greet("bob") == "hi bob"
+
+
+def test_bare_callable_requires_fn_or_zero_arg():
+    c = sws.Config()
+
+    def needs_arg(x):
+        return x
+
+    # Assigning a bare callable will be treated as lazy and invoked at finalize,
+    # which fails if it requires arguments.
+    c.bad = needs_arg
+    with pytest.raises(TypeError):
+        c.finalize()
+
+
+def test_fn_prevents_eager_execution_of_zero_arg_callable():
+    c = sws.Config()
+
+    # Without Fn this would execute at finalize and raise; with Fn it should not execute.
+    c.zero = sws.Fn(lambda: 1 / 0)
+    f = c.finalize()
+
+    assert callable(f.zero)
+    with pytest.raises(ZeroDivisionError):
+        f.zero()
+
+
+def test_iterate_finalconfig():
+    # Empty config iterates to nothing
+    empty = sws.Config().finalize()
+    assert list(empty) == []
+
+    # Non-empty: top-level iterates over top-level child segments
+    c = sws.Config(lr=0.1, model=dict(width=128, depth=4))
+    assert sorted(c.finalize()) == ["lr", "model"]
+
+    # Can also iterate on child
+    assert sorted(c.finalize()["model"]) == ["depth", "width"]
