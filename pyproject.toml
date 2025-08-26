@@ -42,7 +42,7 @@ Repository = "https://github.com/lucasb-eyer/sws"
 source = "vcs"
 
 [tool.hatch.build.targets.sdist]
-include = ["sws", "examples", "tests", "pyproject.toml", "README.md", "LICENSE"]
+include = ["sws", "example", "tests", "pyproject.toml", "README.md", "LICENSE"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["sws"]
