@@ -1,21 +1,21 @@
 """Minimal example using the sws package.
 
-To run this, either install sws, or do python -m examples.main
+To run this, either install sws, or do:
+
+    python -m example.main
 """
 
-import os
-import sys
-
-from sws import Config, lazy, run
+from sws import Config, run
 
 
 def get_config():
     c = Config()
     c.lr = 0.001
-    c.wd = lazy(lambda c: c.lr * 0.1)
+    # Lazies are zero-arg callables that can reference `c` safely.
+    c.wd = lambda: c.lr * 0.1
     c.model.depth = 4
     c.model.width = 256
-    c.model.heads = lazy(lambda m: 4 if m.width > 128 else 1)
+    c.model.heads = lambda: 4 if c.model.width > 128 else 1
     return c
 
 
@@ -35,5 +35,6 @@ if __name__ == "__main__":
     run(main)
 
     # Alternate, a bit more explicit and a bit less flexible:
+    # import sys
     # main(get_config().finalize(sys.argv[1:]))
     # NOTE: This doesn't allow to change config file with --config.
