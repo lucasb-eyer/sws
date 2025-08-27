@@ -198,6 +198,39 @@ There's three more things `sws.run` does for convenience:
 See the `example/` folder of this repo for a semi-realistic example, including
 a sweep to run sweeps.
 
+## Examples
+
+Quick runnable example (mirrors `example/`):
+
+```python
+from sws import Config, run
+
+def get_config():
+    c = Config()
+    c.lr = 0.001
+    c.wd = lambda: c.lr * 0.1
+    c.model.depth = 4
+    c.model.width = 256
+    c.model.heads = lambda: 4 if c.model.width > 128 else 1
+    return c
+
+def main(c):
+    print("Training with config:\n" + str(c))
+    # Your training code here...
+
+if __name__ == "__main__":
+    run(main)
+    # Or, explicitly: main(get_config().finalize(sys.argv[1:]))
+```
+
+Run a different config file and override values from CLI:
+
+```bash
+python -m example.main --config example/super_agi.py model.depth=32 lr=3e-4
+```
+
+See `example/sweep.fish` for a trivial sweep over a few values.
+
 ## Some more misc notes
 
 - The `FinalConfig` has a nice pretty printer when cast to string or printed.
