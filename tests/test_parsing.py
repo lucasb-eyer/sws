@@ -29,8 +29,17 @@ def test_suffix():
     assert c.finalize(["simple=99"]).simple == 99
     assert c.finalize(["voc=99"]).model.head.params.voc == 99
 
-    with pytest.raises(AttributeError):
-        c.finalize(["ple=99"]).simple
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["ple=99"])
+    msg = str(e.value)
+    assert "ple" in msg
+    assert "simple" in msg
+
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["lrr=10"])
+    msg = str(e.value)
+    assert "model.head.lr" in msg
+    assert "thingy.lr" in msg
 
     f = c.finalize(["head.lr=99"])
     assert f.thingy.lr == 0.1
@@ -114,6 +123,13 @@ def test_overrides_inexistent():
         c.finalize(["lol=0.001"])
     with pytest.raises(AttributeError):
         c.finalize(["model.expand=2"])
+
+
+def test_overrides_suggestion():
+    c = Config(lr=0.1, model=dict(width=128, depth=4))
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["model.widht=64"])
+    assert "model.width" in str(e.value)
 
 
 def test_overrides_expressions():
