@@ -184,7 +184,14 @@ class Config(_BaseView):
             suffix = suffix.removeprefix("c.")
             matches = [k for k in self._store if ("." + k).endswith("." + suffix)]
             if not matches:
-                raise AttributeError(suffix)
+                import difflib
+                suggestions = difflib.get_close_matches(
+                    suffix, list(self._store.keys()), n=5, cutoff=0
+                )
+                msg = f"Unknown override key {suffix!r}"
+                if suggestions:
+                    msg += "; did you mean " + ", ".join(suggestions) + "?"
+                raise AttributeError(msg)
             if len(matches) > 1:  # Ambiguous suffix; help user disambiguate
                 raise AttributeError(
                     f"Ambiguous override key {suffix!r}; candidates:\n"
