@@ -85,3 +85,16 @@ def test_run_default_loads_caller_script(tmp_path):
     out = res.stdout.strip().splitlines()
     assert "lr=0.5" in out[0]
     assert "unused=pos" in out[1]
+
+
+def test_run_raises_on_unused_extras_when_not_forwarding():
+    import pytest
+
+    def main(final):
+        # Should not be called when extras are present and not forwarded
+        raise AssertionError("main should not be called")
+
+    with pytest.raises(ValueError) as e:
+        _call_run(["--flag", "positional"], main, forward_extras=False)
+    msg = str(e.value)
+    assert "--flag" in msg and "positional" in msg

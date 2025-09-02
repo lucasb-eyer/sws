@@ -64,9 +64,12 @@ def run(main, *, argv=None, config_flag="--config", default_func="get_config", f
         builder = Config()
 
     final = builder.finalize([arg for arg in args if "=" in arg])
+    extras = [arg for arg in args if "=" not in arg]
     if forward_extras:
-        return main(final, [arg for arg in args if "=" not in arg])
+        return main(final, extras)
     else:
+        if extras:
+            raise ValueError(f"Unused extra arguments: {extras}")
         return main(final)
 
 try:

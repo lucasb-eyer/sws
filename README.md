@@ -190,6 +190,8 @@ There's three more things `sws.run` does for convenience:
 - If you use `run(fn, forward_extras=True)`, then all unused commandline arguments,
   i.e. all those without a `=`, are passed in a list as the second argument to `fn`.
   This can be used to do further custom processing unrelated to `sws`.
+  If `forward_extras` is False and any such extra tokens are present, `sws.run`
+  raises a `ValueError` listing the unused arguments.
 - For extra flexibility, you can actually specify which function should be called.
   The syntax is `--config file.py:function_name`, it's just that the function name
   defaults to `get_config`. This way, you can have multiple slight variants in the
