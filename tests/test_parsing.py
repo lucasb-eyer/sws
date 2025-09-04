@@ -47,8 +47,9 @@ def test_suffix():
 
     with pytest.raises(AttributeError) as e:
         c.finalize(["lr=10"])
-    assert "model.head.lr" in str(e.value)
-    assert "thingy.lr" in str(e.value)
+    msg = str(e.value)
+    assert "model.head.lr" in msg
+    assert "thingy.lr" in msg
 
 
 def test_computed_nested_and_root():

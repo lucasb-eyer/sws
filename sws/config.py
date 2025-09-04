@@ -202,12 +202,21 @@ class Config(_BaseView):
             matches = [k for k in self._store if ("." + k).endswith("." + suffix)]
             if not matches:
                 import difflib
-                suggestions = difflib.get_close_matches(
-                    suffix, list(self._store.keys()), n=5, cutoff=0
-                )
+                # First, try fuzzy match against full dotted keys
+                suggestions = difflib.get_close_matches(suffix, self._store)
+                # Also try fuzzy match against last segments (common typo case),
+                # then expand those to full keys sharing that last segment.
+                num_segs = suffix.count(".") + 1
+                seg_candidates = {".".join(k.split(".")[-num_segs:]) for k in self._store}
+                seg_matches = difflib.get_close_matches(suffix, seg_candidates)
+                for seg in seg_matches:
+                    suggestions.extend(k for k in self._store if k.endswith("." + seg) or k == seg)
+                # Deduplicate while preserving order
+                seen = set()
+                suggestions = [s for s in suggestions if not (s in seen or seen.add(s))]
                 msg = f"Unknown override key {suffix!r}"
                 if suggestions:
-                    msg += "; did you mean " + ", ".join(suggestions) + "?"
+                    msg += "; did you mean:\n" + "\n".join(suggestions)
                 raise AttributeError(msg)
             if len(matches) > 1:  # Ambiguous suffix; help user disambiguate
                 raise AttributeError(
