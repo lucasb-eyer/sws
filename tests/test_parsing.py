@@ -143,6 +143,13 @@ def test_overrides_expressions():
     assert f1.a_string == "a,b,c"
 
 
+def test_overrides_unquoted_string():
+    c = Config(name="hello", nested=dict(label="x"))
+    f = c.finalize(["name=bar", "nested.label=qux"])  # unquoted strings
+    assert f.name == "bar"
+    assert f.nested.label == "qux"
+
+
 def test_overrides_expressions_with_c_view():
     base = Config(lr=1.0, model={"width": 128}, foo=0, bar=0)
     # Reference current config state via c
