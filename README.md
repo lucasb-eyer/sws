@@ -247,6 +247,10 @@ See `example/sweep.fish` for a trivial sweep over a few values.
 - You cannot set a group to a value or vice-versa, i.e. no `c.model = "vit"`
   followed by `c.model.depth = 4` or vice-versa.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
+- When setting values via commandline args, you can use the syntax `name:=value`
+  to create the exact field `c.name` even if it does not exist. This can be useful
+  in rare circumstances where the codebase uses the pattern `c.get("name", default)`
+  for things, and the `get_config` doesn't include a value for `name`. Use with care.
 
 # Installing
 ```bash

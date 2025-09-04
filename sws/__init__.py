@@ -63,13 +63,13 @@ def run(main, *, argv=None, config_flag="--config", default_func="get_config", f
     else:
         builder = Config()
 
-    final = builder.finalize([arg for arg in args if "=" in arg])
-    extras = [arg for arg in args if "=" not in arg]
+    # NOTE: Checking for "=" includes ":=".
+    final, unused = builder.finalize(args, return_unused_argv=True)
     if forward_extras:
-        return main(final, extras)
+        return main(final, unused)
+    elif unused:
+        raise ValueError(f"Unused extra arguments: {unused}")
     else:
-        if extras:
-            raise ValueError(f"Unused extra arguments: {extras}")
         return main(final)
 
 try:

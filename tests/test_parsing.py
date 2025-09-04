@@ -151,3 +151,28 @@ def test_overrides_expressions_with_c_view():
     # Order matters: left-to-right application of overrides
     f2 = base.finalize(["foo=c.lr", "lr=3", "bar=c.lr"])
     assert f2.foo == 1.0 and f2.bar == 3
+
+
+def test_create_or_set_with_walrus_top_level_and_nested():
+    c = Config(lr=0.1)
+    # Create new top-level key
+    f1 = c.finalize(["foobar:=32"])
+    assert f1.foobar == 32 and f1.lr == 0.1
+
+    # Create nested key path
+    f2 = c.finalize(["notes.expid:=\"t42\""])
+    assert f2.notes.expid == "t42"
+
+    # Override existing with := behaves like =
+    f3 = c.finalize(["lr:=0.2"])
+    assert f3.lr == 0.2
+
+    # No suffix matching for :=, creates exact key 'width' even if model.width exists
+    c2 = Config(model=dict(width=128))
+    f4 = c2.finalize(["width:=64"])  # exact new top-level key
+    assert f4.model.width == 128 and f4.width == 64
+
+    # Shadowing conflict: cannot set leaf where group exists
+    import pytest
+    with pytest.raises(ValueError):
+        c2.finalize(["model:=0"])  # group exists under 'model', cannot assign leaf

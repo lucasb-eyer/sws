@@ -168,17 +168,34 @@ class Config(_BaseView):
             del self._store[k]
 
     # Finalization to an immutable, resolved config
-    def finalize(self, argv=None):
+    def finalize(self, argv=None, return_unused_argv=False):
         """Resolve a write-only builder into an immutable, fully-evaluated config."""
         assert not self._prefix, "Call `finalize` on the top-level config."
         self._phase = "finalize"
 
-        # Apply overrides if provided: only `key=value` tokens are processed.
+        # Apply overrides if provided. Support `key=value` for existing keys
+        # (with suffix matching), and `key:=value` to create-or-set an exact
+        # dotted key (no suffix matching, creates if missing).
         evaluator = EvalWithCompoundTypes(names={"c": self, "Fn": Fn})
+        def parse_val(val):
+            try:
+                return evaluator.eval(val)
+            except Exception:  # Assume it's a non-quoted string
+                return val
+
+        unused = []
         for token in list(argv or []):
-            if "=" not in token:
+            if ":=" in token:
+                k, v = token.split(":=", 1)
+                # Use internal assign to respect shadowing rules and allow mappings
+                self._assign(k.removeprefix("c."), parse_val(v))
                 continue
-            suffix, val = token.split("=", 1)
+
+            if "=" not in token:
+                unused.append(token)
+                continue
+
+            suffix, v = token.split("=", 1)
 
             # Find the keys which have this suffix. If multiple, provide error.
             suffix = suffix.removeprefix("c.")
@@ -196,21 +213,22 @@ class Config(_BaseView):
                 raise AttributeError(
                     f"Ambiguous override key {suffix!r}; candidates:\n"
                     + '\n'.join(sorted(matches)))
-            key = matches[0]
 
-            try:
-                self._store[key] = evaluator.eval(val)
-            except Exception:  # Assume it's a non-quoted string
-                self._store[key] = val
+            self._store[matches[0]] = parse_val(v)
 
         # Now go over all items and resolve those that were lazy.
         finalized_store = {k: self[k] for k in self._store}
 
         self._phase = "building"
-        return FinalConfig(
+        final = FinalConfig(
             _store=finalized_store,
             _prefix=self._prefix
         )
+
+        if return_unused_argv:
+            return final, unused
+        else:
+            return final
 
 
 class FinalConfig(_BaseView):
