@@ -124,6 +124,12 @@ def test_shadowing_rules():
     with pytest.raises(TypeError):
         c2.lr.schedule = 128
 
+def test_forbid_creating_group_where_leaf_exists():
+    # Assigning a mapping at a key that already holds a leaf must fail
+    c = Config(lr=3)
+    with pytest.raises(ValueError):
+        c.lr = {"schedule": 128}
+
 
 def test_delete_group_and_leaf():
     c = Config(model={'width': 128, 'depth': 4}, lr=0.1)

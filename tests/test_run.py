@@ -98,3 +98,21 @@ def test_run_raises_on_unused_extras_when_not_forwarding():
         _call_run(["--flag", "positional"], main, forward_extras=False)
     msg = str(e.value)
     assert "--flag" in msg and "positional" in msg
+
+
+# Provide a callable factory in the caller file so run() can find it
+def my_get_config():
+    from sws import Config
+    c = Config()
+    c.lr = 0.77
+    return c
+
+
+def test_run_without_cfg_path_uses_caller_default_func():
+    import pytest
+
+    def main(final):
+        return final.lr
+
+    result = sws.run(main, argv=[], default_func="my_get_config", forward_extras=False)
+    assert result == pytest.approx(0.77)
