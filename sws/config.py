@@ -180,7 +180,7 @@ class Config(_BaseView):
         # Apply overrides if provided. Support `key=value` for existing keys
         # (with suffix matching), and `key:=value` to create-or-set an exact
         # dotted key (no suffix matching, creates if missing).
-        evaluator = EvalWithCompoundTypes(names={"c": self, "Fn": Fn})
+        evaluator = EvalWithCompoundTypes(names={"c": self}, functions={"Fn": Fn, "range": range})
         def parse_val(val):
             def _lazy():
                 try:
