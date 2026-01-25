@@ -119,3 +119,11 @@ def test_iterate_finalconfig():
 
     # Can also iterate on child
     assert sorted(c.finalize()["model"]) == ["depth", "width"]
+
+
+def test_iterate_config_view():
+    c = sws.Config()
+    c.foo = dict(a=3, b=4)
+
+    assert sorted(c) == ["foo"]
+    assert sorted(c.foo) == ["a", "b"]

@@ -49,6 +49,9 @@ class _BaseView:
     def __len__(self):
         return sum(1 for _ in self._iter_child_segments())
 
+    def __iter__(self):
+        return self._iter_child_segments()
+
     def to_flat_dict(self):
         d = {}
         p = self._prefix
