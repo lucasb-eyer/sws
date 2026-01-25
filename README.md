@@ -1,7 +1,9 @@
 # sws
 
+[![PyPI - Version](https://img.shields.io/pypi/v/sws-config?logo=python&logoColor=white&color=green)](https://pypi.org/project/sws-config/)
 [![Tests](https://github.com/lucasb-eyer/sws/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/lucasb-eyer/sws/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/lucasb-eyer/sws/branch/master/graph/badge.svg)](https://codecov.io/gh/lucasb-eyer/sws)
+[![PyPI - License](https://img.shields.io/pypi/l/sws-config)](https://github.com/lucasb-eyer/sws?tab=MIT-1-ov-file#readme)
 
 Minimal, predictable, footgun-free configuration for deep learning experiments.
 The most similar existing ones are
