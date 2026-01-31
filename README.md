@@ -248,8 +248,8 @@ See `example/sweep.fish` for a trivial sweep over a few values.
 
 - The `FinalConfig` has a nice pretty printer when cast to string or printed.
 - When a dict is assigned to a `Config` field, it's turned into a `Config`.
-- You cannot set a group to a value or vice-versa, i.e. no `c.model = "vit"`
-  followed by `c.model.depth = 4` or vice-versa.
+- Assigning a value to a group replaces its subtree (e.g. `c.model = "vit"` clears
+  all `c.model.*`), and assigning a dict to a leaf replaces the leaf with a group.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
 - When setting values via commandline args, you can use the syntax `name:=value`
   to create the exact field `c.name` even if it does not exist. This can be useful

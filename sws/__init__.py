@@ -10,7 +10,7 @@ def run(main, *, argv=None, config_flag="--config", default_func="get_config", f
       specified function (default: `get_config`) to obtain a builder `Config`.
     - Partitions remaining argv into config overrides and unused tokens:
       all `key=value` tokens are passed to `finalize` (which will raise on
-      unknown keys or invalid group assignments). If `forward_extras` is True,
+      unknown keys). If `forward_extras` is True,
       non `key=value` tokens are forwarded to `main` as a second positional
       argument `unused` with preserved order; otherwise they are ignored here.
     - Calls `main(finalized_config, unused_tokens)` when `forward_extras` is True,
