@@ -114,21 +114,25 @@ def test_reading_leaves_is_disallowed():
 
 
 def test_shadowing_rules():
-    # Cannot set leaf at group root when group exists
+    # Overwriting a group with a leaf clears the subtree
     c = Config(model=dict(width=128))
-    with pytest.raises(ValueError):
-        c.model = 5
+    c.model = 5
+    f = c.finalize()
+    assert f.model == 5
+    assert "model.width" not in f.to_flat_dict()
 
-    # Cannot set group when a leaf exists at exact root
+    # Leaf access is still disallowed pre-finalize
     c2 = Config(lr=3)
     with pytest.raises(TypeError):
         c2.lr.schedule = 128
 
-def test_forbid_creating_group_where_leaf_exists():
-    # Assigning a mapping at a key that already holds a leaf must fail
+def test_overwrite_leaf_with_group():
+    # Assigning a mapping at a key that already holds a leaf replaces it
     c = Config(lr=3)
-    with pytest.raises(ValueError):
-        c.lr = {"schedule": 128}
+    c.lr = {"schedule": 128}
+    f = c.finalize()
+    assert f.lr.schedule == 128
+    assert "lr" not in f.to_flat_dict()
 
 
 def test_delete_group_and_leaf():

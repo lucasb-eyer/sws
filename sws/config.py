@@ -89,7 +89,6 @@ class Config(_BaseView):
 
     - Stores all values in a single flat dict of full dotted keys.
     - Accessing a group returns a prefixed view sharing the same store.
-    - Disallows shadowing: a name cannot be both a leaf and a group.
     """
 
     def __init__(self, **kw):
@@ -106,9 +105,17 @@ class Config(_BaseView):
         return new
 
     def _assign_leaf(self, full, value):
-        # Forbid assigning a leaf where a group exists
-        if any(k.startswith(full + ".") for k in self._store):
-            raise ValueError(f"Cannot set leaf '{full}': group with same name exists")
+        # Assigning a leaf replaces any existing subtree and clears conflicting ancestors.
+        prefix = full + "."
+        to_del = [k for k in list(self._store) if k.startswith(prefix)]
+        for k in to_del:
+            del self._store[k]
+        if "." in full:
+            parts = full.split(".")
+            for i in range(1, len(parts)):
+                anc = ".".join(parts[:i])
+                if anc in self._store:
+                    del self._store[anc]
         self._store[full] = value
 
     def _assign(self, full, value):
@@ -116,8 +123,8 @@ class Config(_BaseView):
         if isinstance(value, _BaseView):
             value = value.to_dict()
         if isinstance(value, Mapping):
-            if full in self._store:  # Forbid creating a group where a leaf exists
-                raise ValueError(f"Cannot set group '{full}': leaf with same name exists")
+            if full in self._store:
+                del self._store[full]
             for fk, v in _flatten(full, value):
                 self._assign_leaf(fk, v)
         else:
@@ -181,8 +188,8 @@ class Config(_BaseView):
         self._phase = "finalize"
 
         # Apply overrides if provided. Support `key=value` for existing keys
-        # (with suffix matching), and `key:=value` to create-or-set an exact
-        # dotted key (no suffix matching, creates if missing).
+        # (with suffix matching over leaves and group roots), and `key:=value`
+        # to create-or-set an exact dotted key (no suffix matching, creates if missing).
         evaluator = EvalWithCompoundTypes(names={"c": self}, functions={"Fn": Fn, "range": range})
         def parse_val(val):
             def _lazy():
@@ -196,7 +203,7 @@ class Config(_BaseView):
         for token in list(argv or []):
             if ":=" in token:
                 k, v = token.split(":=", 1)
-                # Use internal assign to respect shadowing rules and allow mappings
+                # Use internal assign to respect overwrite rules and allow mappings
                 self._assign(k.removeprefix("c."), parse_val(v))
                 continue
 
@@ -206,22 +213,37 @@ class Config(_BaseView):
 
             raw_key, v = token.split("=", 1)
 
-            # Find the keys which have this suffix. If multiple, provide error.
+            # Find the keys or group-roots which have this suffix. If multiple, provide error.
             suffix = raw_key.removeprefix("c.")
-            if raw_key.startswith("c.") and suffix in self._store:
-                matches = [suffix]
-            else:
-                matches = [k for k in self._store if ("." + k).endswith("." + suffix)]
-            if not matches:
+            explicit = raw_key.startswith("c.")
+
+            group_roots = None
+
+            def _group_roots():
+                nonlocal group_roots
+                if group_roots is None:
+                    roots = set()
+                    for k in self._store:
+                        parts = k.split(".")
+                        for i in range(1, len(parts)):
+                            roots.add(".".join(parts[:i]))
+                    group_roots = roots
+                return group_roots
+
+            def _raise_unknown():
+                keys = list(self._store)
+                roots = _group_roots()
+                if roots:
+                    keys.extend(sorted(roots))
                 # First, try fuzzy match against full dotted keys
-                suggestions = difflib.get_close_matches(suffix, self._store)
+                suggestions = difflib.get_close_matches(suffix, keys)
                 # Also try fuzzy match against last segments (common typo case),
                 # then expand those to full keys sharing that last segment.
                 num_segs = suffix.count(".") + 1
-                seg_candidates = {".".join(k.split(".")[-num_segs:]) for k in self._store}
+                seg_candidates = {".".join(k.split(".")[-num_segs:]) for k in keys}
                 seg_matches = difflib.get_close_matches(suffix, seg_candidates)
                 for seg in seg_matches:
-                    suggestions.extend(k for k in self._store if k.endswith("." + seg) or k == seg)
+                    suggestions.extend(k for k in keys if k.endswith("." + seg) or k == seg)
                 # Deduplicate while preserving order
                 seen = set()
                 suggestions = [s for s in suggestions if not (s in seen or seen.add(s))]
@@ -229,14 +251,35 @@ class Config(_BaseView):
                 if suggestions:
                     msg += "; did you mean:\n" + "\n".join(suggestions)
                 raise AttributeError(msg)
-            if len(matches) > 1:  # Ambiguous suffix; help user disambiguate
+
+            def _raise_ambiguous(candidates):
                 msg = f"Ambiguous override key {suffix!r}; candidates:\n" \
-                      + '\n'.join(sorted(matches))
-                if suffix in self._store and not raw_key.startswith("c."):
+                      + '\n'.join(sorted(candidates))
+                if (suffix in self._store or suffix in _group_roots()) and not explicit:
                     msg += f"\nHint: use 'c.{suffix}=VALUE' to target that exact key."
                 raise AttributeError(msg)
 
-            self._store[matches[0]] = parse_val(v)
+            # Exact match when explicitly prefixed with c.
+            if explicit and suffix in self._store:
+                target = suffix
+            elif explicit and suffix in _group_roots():
+                target = suffix
+            else:
+                leaf_matches = [k for k in self._store if ("." + k).endswith("." + suffix)]
+                if len(leaf_matches) > 1:
+                    _raise_ambiguous(leaf_matches)
+                if len(leaf_matches) == 1:
+                    target = leaf_matches[0]
+                else:
+                    group_matches = [g for g in _group_roots() if ("." + g).endswith("." + suffix)]
+                    if len(group_matches) > 1:
+                        _raise_ambiguous(group_matches)
+                    if len(group_matches) == 1:
+                        target = group_matches[0]
+                    else:
+                        _raise_unknown()
+
+            self._assign(target, parse_val(v))
 
         # Now go over all items and resolve those that were lazy.
         finalized_store = {k: self[k] for k in self._store}

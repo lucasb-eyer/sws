@@ -33,19 +33,20 @@ def test_run_with_config_and_overrides():
     assert unused == ["--extra", "pos"]
 
 
-def test_run_with_config_colon_func_and_group_override_ignored():
+def test_run_with_config_colon_func_and_group_override():
     cfg_path = os.path.join(os.path.dirname(__file__), "fixtures", "sample_config.py:get_config")
 
     def main(final, unused):
         return final, unused
 
-    import pytest
-    with pytest.raises(AttributeError):
-        _call_run([
-            f"--config={cfg_path}",
-            "model=bad",  # invalid: group assignment should raise
-            "model.depth=6",
-        ], main)
+    final, unused = _call_run([
+        f"--config={cfg_path}",
+        "model=bad",
+        "lr=0.2",
+    ], main)
+    assert final.model == "bad"
+    assert "model.width" not in final.to_flat_dict()
+    assert final.lr == 0.2
 
 def test_run_unknown_key_raises():
     cfg_path = os.path.join(os.path.dirname(__file__), "fixtures", "sample_config.py")

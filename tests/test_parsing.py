@@ -180,10 +180,10 @@ def test_create_or_set_with_walrus_top_level_and_nested():
     f4 = c2.finalize(["width:=64"])  # exact new top-level key
     assert f4.model.width == 128 and f4.width == 64
 
-    # Shadowing conflict: cannot set leaf where group exists
-    import pytest
-    with pytest.raises(ValueError):
-        c2.finalize(["model:=0"])  # group exists under 'model', cannot assign leaf
+    # Overwriting a group root with := clears the subtree
+    f5 = c2.finalize(["model:=0"])
+    assert f5.model == 0
+    assert "model.width" not in f5.to_flat_dict()
 
 
 def test_override_prefers_exact_key_when_using_c_prefix():
