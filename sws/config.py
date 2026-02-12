@@ -307,11 +307,34 @@ def json_invalid_to_string(obj):
 class FinalConfig(_BaseView):
     """Final, read-only config with flat store and prefix views."""
 
-    def __init__(self, _store, _prefix=""):
+    def __init__(self, _store, _prefix="", _subtree_prefixes=None):
         object.__setattr__(self, "_store", _store)
         object.__setattr__(self, "_prefix", _prefix if _prefix else "")
+        object.__setattr__(self, "_subtree_prefixes", _subtree_prefixes)
 
-    # _full, __contains__, to_dict, to_flat_dict, __len__ from _BaseView
+    # _full, to_dict, to_flat_dict, __len__ from _BaseView
+
+    @staticmethod
+    def _build_subtree_prefixes(store):
+        # Store dotted prefixes with trailing dots so subtree membership is O(1).
+        prefixes = set()
+        for key in store:
+            idx = key.find(".")
+            while idx != -1:
+                prefixes.add(key[: idx + 1])
+                idx = key.find(".", idx + 1)
+        return frozenset(prefixes)
+
+    def _has_subtree(self, full):
+        prefixes = self._subtree_prefixes
+        if prefixes is None:
+            prefixes = self._build_subtree_prefixes(self._store)
+            object.__setattr__(self, "_subtree_prefixes", prefixes)
+        return (full + ".") in prefixes
+
+    def __contains__(self, key):
+        full = self._full(key)
+        return (full in self._store) or self._has_subtree(full)
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -330,8 +353,8 @@ class FinalConfig(_BaseView):
         if full in self._store:
             return self._store[full]
         prefix = full + "."
-        if any(k.startswith(prefix) for k in self._store):
-            return FinalConfig(self._store, prefix)
+        if self._has_subtree(full):
+            return FinalConfig(self._store, prefix, self._subtree_prefixes)
         raise KeyError(key)
 
     def get(self, key, default=None):
