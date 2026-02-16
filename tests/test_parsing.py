@@ -216,3 +216,65 @@ def test_override_c_reference_missing_key_keeps_string():
     c = Config()
     f = c.finalize(["name:=f'hi-{c.xid}'"])
     assert f.name == "f'hi-{c.xid}'"
+
+
+def test_override_wildcard_sets_all_matching_leaves_by_raw_suffix():
+    c = Config()
+    c.eagerness = 1
+    c.model.eagerness = 2
+    c.agent.head.eagerness = 3
+    c.model.super_eagerness = 99
+
+    f = c.finalize(["..eagerness=32"])
+
+    assert f.eagerness == 32
+    assert f.model.eagerness == 32
+    assert f.agent.head.eagerness == 32
+    assert f.model.super_eagerness == 32
+
+
+def test_override_wildcard_triple_dot_is_dot_prefixed_suffix_trick():
+    c = Config()
+    c.foo.eager = 1
+    c.bar.baz.eager = 2
+    c.lol.true_eager = 9
+
+    f = c.finalize(["...eager=7"])
+
+    assert f.foo.eager == 7
+    assert f.bar.baz.eager == 7
+    assert f.lol.true_eager == 9
+
+
+def test_override_wildcard_supports_dotted_suffix():
+    c = Config()
+    c.model.head.eagerness = 1
+    c.agent.head.eagerness = 2
+    c.model.tail.eagerness = 3
+
+    f = c.finalize(["..head.eagerness=7"])
+
+    assert f.model.head.eagerness == 7
+    assert f.agent.head.eagerness == 7
+    assert f.model.tail.eagerness == 3
+
+
+def test_override_wildcard_requires_non_empty_suffix():
+    c = Config(lr=0.1)
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["..=32"])
+    assert "Invalid wildcard override key" in str(e.value)
+
+
+def test_override_wildcard_unknown_suffix():
+    c = Config(model=dict(width=128, depth=4))
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["..eagerness=32"])
+    assert "Unknown override key 'eagerness'" in str(e.value)
+
+
+def test_override_wildcard_preserves_argv_order():
+    c = Config(model=dict(eagerness=1), agent=dict(eagerness=2))
+    f = c.finalize(["..eagerness=32", "model.eagerness=64"])
+    assert f.model.eagerness == 64
+    assert f.agent.eagerness == 32

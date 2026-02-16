@@ -120,7 +120,7 @@ c = c.finalize(["width=512", "depth=2+2"])
 # In real life, you'd probably pass sys.argv[1:] instead.
 ```
 
-Only the syntax `a=b` is supported, any argument without `=` is ignored.
+Only the syntax `a=b` is supported (not `a b` or `--a b`), any argument without `=` is ignored.
 This is to reduce ambiguity and allow catching typos.
 
 The values of the overrides are parsed as Python expressions using the `simpleeval`
@@ -135,6 +135,17 @@ across the _whole_ config (i.e. all nesting levels).
 For example, `model.head.lr` can be shortened to `head.lr` or `lr` if unambiguous.
 In the case of ambiguity, `sws` errs on the cautious side and error out.
 You can always specify the full name starting with `c.` to be perfectly unambiguous.
+
+If there's a leaf name that you use many times, and you'd like to set _all_ these leaves
+to a specific value, use the wildcard prefix syntax `..name=value`.
+For example, if `c.head.lr` and `c.body.lr` both exist, you may use `..lr=0.1` to set both
+simultaneously. Note that this is a "plaintext" wildcard, so it will also match `c.flip_lr`.
+If you want to match only full leaf names, just add a dot: `...lr=0.1`, since this matches
+the suffix `.lr`.
+
+Finally, the syntax `name:=value` creates the exact field `c.name` even if it does not exist.
+This can be useful when the codebase uses the pattern `c.get("name", default)` for things,
+and the `get_config` doesn't include a value for `name`. Use with care though.
 
 ## `sws.run` and suggested code structure
 
@@ -251,10 +262,6 @@ See `example/sweep.fish` for a trivial sweep over a few values.
 - Assigning a value to a group replaces its subtree (e.g. `c.model = "vit"` clears
   all `c.model.*`), and assigning a dict to a leaf replaces the leaf with a group.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
-- When setting values via commandline args, you can use the syntax `name:=value`
-  to create the exact field `c.name` even if it does not exist. This can be useful
-  in rare circumstances where the codebase uses the pattern `c.get("name", default)`
-  for things, and the `get_config` doesn't include a value for `name`. Use with care.
 - The `FinalConfig` has a `.to_json()` and `.to_flat_json()` utils that returns a
   string that's the json serialized config, but with non-json-serializable values
   replaced by an explanatory string. It's for logging/storing of configs for humans.
