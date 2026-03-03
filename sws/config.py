@@ -268,7 +268,9 @@ class Config(_BaseView):
                 msg = f"Ambiguous override key {suffix!r}; candidates:\n" \
                       + '\n'.join(sorted(candidates))
                 if (suffix in self._store or suffix in _group_roots()) and not explicit:
-                    msg += f"\nHint: use 'c.{suffix}=VALUE' to target that exact key."
+                    msg += (f"\nHint: use 'c.{suffix}=VALUE' to target that exact key, "
+                            f"'..{suffix}=VALUE' to target all key with that suffix, and "
+                            f"hence '...{suffix}=VALUE' to target all leaves with that name.")
                 raise AttributeError(msg)
 
             if wildcard:
