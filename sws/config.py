@@ -70,7 +70,7 @@ class _BaseView:
                 if part not in cur or not isinstance(cur[part], dict):
                     cur[part] = {}
                 cur = cur[part]
-            cur[parts[-1]] = v
+            cur[parts[-1]] = _export_value(v)
         return out
 
 
@@ -82,6 +82,22 @@ def _flatten(base, value):
             yield from _flatten(fk, v)
     else:
         yield base, value
+
+
+def _export_value(value):
+    if isinstance(value, _BaseView):
+        return value.to_dict()
+    if isinstance(value, Mapping):
+        return {k: _export_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_export_value(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_export_value(v) for v in value)
+    if isinstance(value, set):
+        return {_export_value(v) for v in value}
+    if isinstance(value, frozenset):
+        return frozenset(_export_value(v) for v in value)
+    return value
 
 
 class Config(_BaseView):

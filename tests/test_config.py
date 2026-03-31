@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import pytest
 from sws import Config
 
@@ -175,3 +177,30 @@ def test_lazy_subdicts_finalization():
     from sws.config import FinalConfig
     assert isinstance(c['a'], FinalConfig)
     assert isinstance(c['b'], FinalConfig)
+    assert c.to_dict() == {'a': {'a': 1}, 'b': {'a': 1}}
+
+
+def test_to_dict_recursively_exports_nested_finalconfig_values():
+    c = Config()
+    c.foo.bar = 1
+    c.alias = lambda: {"nested": [c.foo]}
+    f = c.finalize()
+
+    assert f.to_dict() == {
+        "foo": {"bar": 1},
+        "alias": {"nested": [{"bar": 1}]},
+    }
+
+
+def test_finalize_preserves_lazy_mapping_subclass():
+    c = Config()
+    c.foo.bar = 1
+    c.alias = lambda: defaultdict(list, nested=c.foo)
+    f = c.finalize()
+
+    assert isinstance(f.alias, defaultdict)
+    assert f.alias.default_factory is list
+    assert f.to_dict() == {
+        "foo": {"bar": 1},
+        "alias": {"nested": {"bar": 1}},
+    }
