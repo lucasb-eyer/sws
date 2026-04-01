@@ -217,12 +217,22 @@ class Config(_BaseView):
                     return val
             return _lazy
 
+        def _validate_exact_override_key(raw_key):
+            key = raw_key.removeprefix("c.")
+            if key.startswith(".") or ".." in key or key.endswith("."):
+                msg = f"Invalid exact override key {raw_key!r}. "
+                msg += "':=' requires an explicit dotted path with non-empty segments and "
+                msg += "does not support wildcard prefixes like '..' or '...'. "
+                msg += f"Use '=' for wildcard matching, for example {raw_key}=VALUE."
+                raise AttributeError(msg)
+            return key
+
         unused = []
         for token in list(argv or []):
             if ":=" in token:
                 k, v = token.split(":=", 1)
                 # Use internal assign to respect overwrite rules and allow mappings
-                self._assign(k.removeprefix("c."), parse_val(v))
+                self._assign(_validate_exact_override_key(k), parse_val(v))
                 continue
 
             if "=" not in token:

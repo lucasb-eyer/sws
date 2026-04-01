@@ -186,6 +186,20 @@ def test_create_or_set_with_walrus_top_level_and_nested():
     assert "model.width" not in f5.to_flat_dict()
 
 
+def test_create_or_set_with_walrus_rejects_wildcards_and_empty_segments():
+    c = Config(model=dict(width=128))
+
+    bad_keys = ["..foo.bar", "...foo.bar", ".foo", "foo..bar", "foo."]
+    for key in bad_keys:
+        with pytest.raises(AttributeError) as e:
+            c.finalize([f"{key}:=3"])
+        msg = str(e.value)
+        assert f"Invalid exact override key '{key}'" in msg
+        assert "':=' requires an explicit dotted path with non-empty segments" in msg
+        assert "does not support wildcard prefixes like '..' or '...'" in msg
+        assert f"Use '=' for wildcard matching, for example {key}=VALUE." in msg
+
+
 def test_override_prefers_exact_key_when_using_c_prefix():
     c = Config()
     c.foo = 1
