@@ -136,7 +136,7 @@ For example, `model.head.lr` can be shortened to `head.lr` or `lr` if unambiguou
 In the case of ambiguity, `sws` errs on the cautious side and error out.
 You can always specify the full name starting with `c.` to be perfectly unambiguous.
 
-If there's a leaf name that you use many times, and you'd like to set _all_ these leaves
+If there's a name that you use many times, and you'd like to set _all_ matching keys
 to a specific value, use the wildcard prefix syntax `..name=value`.
 For example, if `c.head.lr` and `c.body.lr` both exist, you may use `..lr=0.1` to set both
 simultaneously. Note that this is a "plaintext" wildcard, so it will also match `c.flip_lr`.

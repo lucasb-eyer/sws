@@ -205,7 +205,7 @@ class Config(_BaseView):
 
         # Apply overrides if provided. Support `key=value` for existing keys
         # (with suffix matching over leaves and group roots),
-        # `..suffix=value` to set all matching leaves by raw dotted-key suffix,
+        # `..suffix=value` to set all matching leaves/group-roots by raw dotted-key suffix,
         # and `key:=value` to create-or-set an exact dotted key
         # (no suffix matching, creates if missing).
         evaluator = EvalWithCompoundTypes(names={"c": self}, functions={"Fn": Fn, "range": range})
@@ -290,13 +290,21 @@ class Config(_BaseView):
             def _raw_suffix_match(candidates, key_suffix):
                 return [k for k in candidates if ("." + k).endswith(key_suffix)]
 
+            def _prune_descendant_targets(candidates):
+                pruned = []
+                for candidate in sorted(set(candidates), key=lambda k: (k.count("."), k)):
+                    if any(candidate.startswith(parent + ".") for parent in pruned):
+                        continue
+                    pruned.append(candidate)
+                return pruned
+
             def _raise_ambiguous(candidates):
                 msg = f"Ambiguous override key {suffix!r}; candidates:\n" \
                       + '\n'.join(sorted(candidates))
                 if (suffix in self._store or suffix in _group_roots()) and not explicit:
                     msg += (f"\nHint: use 'c.{suffix}=VALUE' to target that exact key, "
                             f"'..{suffix}=VALUE' to target all key with that suffix, and "
-                            f"hence '...{suffix}=VALUE' to target all leaves with that name.")
+                            f"hence '...{suffix}=VALUE' to target all keys with that exact name.")
                 raise AttributeError(msg)
 
             if wildcard:
@@ -304,7 +312,10 @@ class Config(_BaseView):
                     raise AttributeError("Invalid wildcard override key '..'; "
                                          "expected '..suffix=VALUE'.")
 
-                targets = sorted(_raw_suffix_match(self._store, suffix))
+                targets = _prune_descendant_targets(
+                    _raw_suffix_match(self._store, suffix)
+                    + _raw_suffix_match(_group_roots(), suffix)
+                )
                 if not targets:
                     unknown = suffix[1:] if suffix.startswith(".") else suffix
                     _raise_unknown(unknown)

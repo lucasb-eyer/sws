@@ -273,6 +273,34 @@ def test_override_wildcard_supports_dotted_suffix():
     assert f.model.tail.eagerness == 3
 
 
+def test_override_wildcard_matches_group_roots():
+    c = Config()
+    c.data.tokenizer.path = "tok-a.model"
+    c.data.tokenizer.regex = "a+"
+    c.evals.decode.data.tokenizer.path = "tok-b.model"
+    c.evals.decode.data.tokenizer.regex = "b+"
+    c.misc.detokenizer = "leave me alone"
+
+    f = c.finalize(["...tokenizer=None"])
+
+    assert f.data.tokenizer is None
+    assert f.evals.decode.data.tokenizer is None
+    assert f.misc.detokenizer == "leave me alone"
+    assert "data.tokenizer.path" not in f.to_flat_dict()
+    assert "evals.decode.data.tokenizer.path" not in f.to_flat_dict()
+
+
+def test_override_wildcard_group_root_suppresses_descendant_matches():
+    c = Config()
+    c.foo.tokenizer.kind = "outer"
+    c.foo.tokenizer.inner.tokenizer.kind = "inner"
+
+    f = c.finalize(["...tokenizer=None"])
+
+    assert f.foo.tokenizer is None
+    assert "foo.tokenizer.inner.tokenizer.kind" not in f.to_flat_dict()
+
+
 def test_override_wildcard_requires_non_empty_suffix():
     c = Config(lr=0.1)
     with pytest.raises(AttributeError) as e:
