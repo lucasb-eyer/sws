@@ -15,6 +15,11 @@ class CycleError(FinalizeError):
     pass
 
 
+class MissingKeyError(KeyError, AttributeError):
+    """A missing config path that should behave like both key and attr lookup."""
+    pass
+
+
 class Fn:
     """Wrapper to store a callable as a plain value."""
     def __init__(self, fn):
@@ -151,7 +156,10 @@ class Config(_BaseView):
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)  # Avoid making views for inexistent.
-        return self[name]
+        try:
+            return self[name]
+        except KeyError as e:
+            raise MissingKeyError(name) from e
 
     def __setattr__(self, name, value):
         if name.startswith("_"):

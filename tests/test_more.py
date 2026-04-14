@@ -51,6 +51,18 @@ def test_finalize_missing_key():
         c.finalize()
 
 
+def test_finalize_missing_key_supports_getattr_default():
+    c = sws.Config()
+    c.x = lambda: getattr(c, "y", None)
+    assert c.finalize().x is None
+
+
+def test_finalize_missing_key_supports_hasattr():
+    c = sws.Config()
+    c.x = lambda: hasattr(c, "y")
+    assert c.finalize().x is False
+
+
 def test_overrides_boolean_and_list_eval():
     base = sws.Config(flag=False, lst=[1])
     f = base.finalize(["flag=True", "lst=[1,2,3]"])
