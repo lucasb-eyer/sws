@@ -355,11 +355,41 @@ class Config(_BaseView):
                 self._assign(target, parse_val(v))
 
         # Now go over all items and resolve those that were lazy.
-        finalized_store = {k: self[k] for k in self._store}
+        resolved_store = {k: self[k] for k in self._store}
+        finalized_store = {}
 
-        for k, v in list(finalized_store.items()):
-            if isinstance(v, Config):
-                finalized_store[k] = FinalConfig(finalized_store, v._prefix)
+        def _flatten_final_value(source_key, dest_key, value, cycle):
+            if isinstance(value, Config):
+                if source_key in cycle:
+                    raise CycleError(
+                        "Cycle detected while flattening config views: "
+                        + " -> ".join([*cycle, source_key])
+                    )
+
+                src_prefix = value._prefix
+                plen = len(src_prefix)
+                next_cycle = [*cycle, source_key]
+                for child_key, child_val in resolved_store.items():
+                    if not child_key.startswith(src_prefix):
+                        continue
+                    if child_key == source_key or child_key.startswith(source_key + "."):
+                        continue
+
+                    rel = child_key[plen:]
+                    child_dest = f"{dest_key}.{rel}" if rel else dest_key
+                    _flatten_final_value(child_key, child_dest, child_val, next_cycle)
+                return
+
+            if isinstance(value, FinalConfig):
+                for rel, child_val in value.to_flat_dict().items():
+                    child_dest = f"{dest_key}.{rel}" if rel else dest_key
+                    finalized_store[child_dest] = child_val
+                return
+
+            finalized_store[dest_key] = value
+
+        for key, value in resolved_store.items():
+            _flatten_final_value(key, key, value, [])
 
         self._phase = "building"
         final = FinalConfig(

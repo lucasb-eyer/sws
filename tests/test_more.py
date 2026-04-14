@@ -63,6 +63,44 @@ def test_finalize_missing_key_supports_hasattr():
     assert c.finalize().x is False
 
 
+def test_finalize_config_alias_flattening_for_optional_subtree():
+    c = sws.Config()
+    c.eval.tokenizer = lambda: getattr(c, "tokenizer", None)
+
+    f = c.finalize()
+    assert f.eval.tokenizer is None
+    assert f.to_flat_dict() == {"eval.tokenizer": None}
+
+    f = c.finalize(["tokenizer.first_N:=128"])
+    assert f.eval.tokenizer.first_N == 128
+    assert f.to_flat_dict() == {
+        "tokenizer.first_N": 128,
+        "eval.tokenizer.first_N": 128,
+    }
+
+
+def test_finalize_self_alias_subtree_stays_finite():
+    c = sws.Config()
+    c.a.b = 1
+    c.a.alias = lambda: c.a
+    f = c.finalize()
+
+    assert f.a.alias.b == 1
+    assert f.to_flat_dict() == {
+        "a.b": 1,
+        "a.alias.b": 1,
+    }
+
+
+def test_finalize_config_alias_cycles_are_detected():
+    c = sws.Config()
+    c.x = lambda: c
+    c.y = lambda: c.x
+
+    with pytest.raises(sws.CycleError):
+        c.finalize()
+
+
 def test_overrides_boolean_and_list_eval():
     base = sws.Config(flag=False, lst=[1])
     f = base.finalize(["flag=True", "lst=[1,2,3]"])

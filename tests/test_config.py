@@ -177,6 +177,7 @@ def test_lazy_subdicts_finalization():
     from sws.config import FinalConfig
     assert isinstance(c['a'], FinalConfig)
     assert isinstance(c['b'], FinalConfig)
+    assert c.to_flat_dict() == {'a.a': 1, 'b.a': 1}
     assert c.to_dict() == {'a': {'a': 1}, 'b': {'a': 1}}
 
 
@@ -204,3 +205,28 @@ def test_finalize_preserves_lazy_mapping_subclass():
         "foo": {"bar": 1},
         "alias": {"nested": {"bar": 1}},
     }
+
+
+def test_finalize_flattens_nested_config_aliases_recursively():
+    c = Config()
+    c.base.value = 3
+    c.mid = lambda: c.base
+    c.outer = lambda: c.mid
+    f = c.finalize()
+
+    assert f.mid.value == 3
+    assert f.outer.value == 3
+    assert f.to_flat_dict() == {
+        "base.value": 3,
+        "mid.value": 3,
+        "outer.value": 3,
+    }
+
+
+def test_finalize_keeps_plain_mapping_results_as_leaf_values():
+    c = Config()
+    c.alias = lambda: {"nested": 1}
+    f = c.finalize()
+
+    assert f.alias == {"nested": 1}
+    assert f.to_flat_dict() == {"alias": {"nested": 1}}
