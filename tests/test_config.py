@@ -230,3 +230,15 @@ def test_finalize_keeps_plain_mapping_results_as_leaf_values():
 
     assert f.alias == {"nested": 1}
     assert f.to_flat_dict() == {"alias": {"nested": 1}}
+
+
+def test_finalize_flattens_returned_finalconfig():
+    # Slightly obscure, but supported: a lazy may return an already-finalized config
+    # object instead of a builder view, and finalize should still inline its leaves.
+    fc = Config(a=1).finalize()
+    c = Config()
+    c.alias = lambda: fc
+    f = c.finalize()
+
+    assert f.alias.a == 1
+    assert f.to_flat_dict() == {"alias.a": 1}
