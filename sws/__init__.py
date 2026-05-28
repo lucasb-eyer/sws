@@ -1,5 +1,14 @@
 from importlib.metadata import PackageNotFoundError, version as _version
-from .config import Config, Fn, FinalConfig, FinalizeError, CycleError, from_json, from_flat_json
+from .config import (
+    Config,
+    Fn,
+    FinalConfig,
+    FinalizeError,
+    CycleError,
+    LazySubtreeError,
+    from_json,
+    from_flat_json,
+)
 
 def run(main, *, argv=None, config_flag="--config", default_func="get_config", forward_extras=False):
     """Entry-point helper to load a config file, finalize it, and call `main`.

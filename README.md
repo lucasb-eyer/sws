@@ -255,6 +255,48 @@ python -m train --config configs/super_agi.py model.depth=32
 
 See `example/sweep.fish` for a trivial sweep over a few values.
 
+## Reusable subtrees
+
+As projects and config grows, you may want to write helper functions to populate subtrees.
+The `sws`-blessed way to do so, which ensures that all features work as expected without
+footguns, is creating the subtree "in-place" as follows:
+
+```python
+def make_tokenizer(c, ctok):
+    ctok.path = lambda: f"/foo/bar/{c.voc}" if c.voc != "magic" else "/the/magic"
+    ctok.regex = r"\d+" if c.voc == "magic" else "default"
+
+c = Config()
+c.voc = "not magic 123"
+make_tokenizer(c, c.data.tokenizer)
+```
+
+This keeps all leaves visible before finalization, so everything you'd expect works:
+normal overrides like `voc=magic` and `data.tokenizer.regex=r"\w+"`, and even creating
+explicit extra leaves such as `data.tokenizer.special:=42`.
+
+Depending on your background, you may have defaulted to the following construction,
+which does *not* work and is not possible for `sws` to support without dangerous footguns:
+
+```python
+def make_tokenizer(name):  # DON'T
+    c = Config()
+    c.path = f"/foo/bar/{name}" if name != "magic" else "/the/magic"
+    c.regex = r"\d+" if name == "magic" else "default"
+    return c
+
+c = Config()
+c.voc = "not magic 123"
+c.data.tokenizer = make_tokenizer(c.voc)  # NOT RIGHT
+c.data.tokenizer = lambda: make_tokenizer(c.voc)  # NOT RIGHT EITHER
+```
+
+Since this is the first intuition for some people, `sws` detects this pattern and
+gives an error message hinting to the blessed way.
+
+Note that a function returning plain python dictionaries works, since dictionaries
+are valid config *leaf values*, but that will *not* create a subtree from the dict.
+
 ## Some more misc notes
 
 - The `FinalConfig` has a nice pretty printer when cast to string or printed.

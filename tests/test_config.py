@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 import pytest
-from sws import Config
+from sws import Config, LazySubtreeError
 
 def test_construct_kwargs():
     c = Config(
@@ -179,6 +179,66 @@ def test_lazy_subdicts_finalization():
     assert isinstance(c['b'], FinalConfig)
     assert c.to_flat_dict() == {'a.a': 1, 'b.a': 1}
     assert c.to_dict() == {'a': {'a': 1}, 'b': {'a': 1}}
+
+
+def test_lazy_returning_fresh_config_is_rejected_with_hint():
+    def make_first(parent):
+        cf = Config()
+        cf.a = 3
+        cf.b = lambda: parent.bar
+        return cf
+
+    c = Config()
+    c.bar = 5
+    c.first = lambda: make_first(c)
+
+    with pytest.raises(LazySubtreeError) as e:
+        c.finalize()
+
+    msg = str(e.value)
+    assert "Lazy field 'first' returned a new sws.Config" in msg
+    assert "make_subtree(c, c.some.subtree)" in msg
+
+
+@pytest.mark.parametrize("override", ["first.a=2", "first.a:=2"])
+def test_override_below_lazy_leaf_is_rejected_with_hint(override):
+    c = Config()
+    c.first = lambda: 1
+
+    with pytest.raises(LazySubtreeError) as e:
+        c.finalize([override])
+
+    msg = str(e.value)
+    assert "Cannot override 'first.a': 'first' is a lazy leaf" in msg
+    assert "make_subtree(c, c.some.subtree)" in msg
+
+
+def test_reusable_subtree_builder_pattern_supports_overrides_and_new_leaves():
+    def make_first(c, cf):
+        cf.a = 3
+        cf.b = lambda: c.bar
+        cf.extra_used = lambda: getattr(cf, "extra", None)
+
+    c = Config()
+    c.bar = 5
+    make_first(c, c.first)
+
+    f = c.finalize(["bar=7", "first.a=4", "first.extra:=9"])
+
+    assert f.bar == 7
+    assert f.first.a == 4
+    assert f.first.b == 7
+    assert f.first.extra == 9
+    assert f.first.extra_used == 9
+
+
+def test_exact_create_after_argv_leaf_override_keeps_argv_ordering():
+    c = Config()
+    c.first = lambda: 1
+
+    f = c.finalize(["first=0", "first.a:=2"])
+
+    assert f.to_flat_dict() == {"first.a": 2}
 
 
 def test_to_dict_recursively_exports_nested_finalconfig_values():

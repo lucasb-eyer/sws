@@ -15,6 +15,10 @@ class CycleError(FinalizeError):
     pass
 
 
+class LazySubtreeError(FinalizeError):
+    pass
+
+
 class MissingKeyError(KeyError, AttributeError):
     """A missing config path that should behave like both key and attr lookup."""
     pass
@@ -112,15 +116,30 @@ class Config(_BaseView):
     - Accessing a group returns a prefixed view sharing the same store.
     """
 
+    @property
+    def _phase(self):
+        return self._state["phase"]
+
+    @_phase.setter
+    def _phase(self, value):
+        self._state["phase"] = value
+
+    @property
+    def _cycle(self):
+        return self._state["cycle"]
+
+    @_cycle.setter
+    def _cycle(self, value):
+        self._state["cycle"] = value
+
     def __init__(self, **kw):
         self._store = {}
         self._prefix = ""
-        self._phase = "building"
-        self._cycle = []
+        self._state = {"phase": "building", "cycle": []}
         self._assign(None, kw)  # Init from kw's.
 
     def _with_prefix(self, prefix):
-        """A shallow copy (sharing store/cycle) with new prefix."""
+        """A shallow copy (sharing store/finalization state) with new prefix."""
         new = copy(self)
         new._prefix = prefix
         return new
@@ -223,6 +242,7 @@ class Config(_BaseView):
                     return evaluator.eval(val)
                 except Exception:
                     return val
+            _lazy._sws_argv_override = True
             return _lazy
 
         def _validate_exact_override_key(raw_key):
@@ -235,12 +255,44 @@ class Config(_BaseView):
                 raise AttributeError(msg)
             return key
 
+        def _lazy_subtree_hint():
+            return (
+                "Reusable subtrees should be built by writing into a subtree view during "
+                "config construction, for example:\n"
+                "    def make_foobar(c, cf):\n"
+                "        cf.baz = lambda: c.thingy + 2\n"
+                "    make_foobar(c, c.foo.bar)\n"
+                "The way you are trying to do it is full of footguns, which is against sws design."
+            )
+
+        def _lazy_leaf_ancestor(key_suffix):
+            for k, v_existing in sorted(self._store.items(), key=lambda kv: -len(kv[0])):
+                if isinstance(v_existing, Fn) or not callable(v_existing):
+                    continue
+                if getattr(v_existing, "_sws_argv_override", False):
+                    continue
+                if key_suffix.startswith(k + "."):
+                    return k
+            return None
+
+        def _raise_lazy_leaf_descendant(raw_key, lazy_key):
+            raise LazySubtreeError(
+                f"Cannot override {raw_key!r}: {lazy_key!r} is a lazy leaf, "
+                "so its children are not known config keys. Lazy values are not "
+                "supported for declaring new overridable subtrees.\n"
+                + _lazy_subtree_hint()
+            )
+
         unused = []
         for token in list(argv or []):
             if ":=" in token:
                 k, v = token.split(":=", 1)
+                key = _validate_exact_override_key(k)
+                lazy_key = _lazy_leaf_ancestor(key)
+                if lazy_key is not None:
+                    _raise_lazy_leaf_descendant(k, lazy_key)
                 # Use internal assign to respect overwrite rules and allow mappings
-                self._assign(_validate_exact_override_key(k), parse_val(v))
+                self._assign(key, parse_val(v))
                 continue
 
             if "=" not in token:
@@ -350,6 +402,9 @@ class Config(_BaseView):
                         if len(group_matches) == 1:
                             target = group_matches[0]
                         else:
+                            lazy_key = _lazy_leaf_ancestor(suffix)
+                            if lazy_key is not None:
+                                _raise_lazy_leaf_descendant(raw_key, lazy_key)
                             _raise_unknown()
 
                 self._assign(target, parse_val(v))
@@ -360,6 +415,14 @@ class Config(_BaseView):
 
         def _flatten_final_value(source_key, dest_key, value, cycle):
             if isinstance(value, Config):
+                if value._store is not self._store:
+                    raise LazySubtreeError(
+                        f"Lazy field {source_key!r} returned a new sws.Config. "
+                        "Lazy values may alias an existing subtree, but they cannot "
+                        "declare new overridable subtrees.\n"
+                        + _lazy_subtree_hint()
+                    )
+
                 if source_key in cycle:
                     raise CycleError(
                         "Cycle detected while flattening config views: "
