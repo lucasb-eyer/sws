@@ -181,6 +181,12 @@ def test_lazy_subdicts_finalization():
     assert c.to_dict() == {'a': {'a': 1}, 'b': {'a': 1}}
 
 
+def assert_lazy_subtree_hint(msg):
+    assert "Reusable subtrees" in msg
+    assert "subtree view" in msg
+    assert "config construction" in msg
+
+
 def test_lazy_returning_fresh_config_is_rejected_with_hint():
     def make_first(parent):
         cf = Config()
@@ -197,7 +203,7 @@ def test_lazy_returning_fresh_config_is_rejected_with_hint():
 
     msg = str(e.value)
     assert "Lazy field 'first' returned a new sws.Config" in msg
-    assert "make_subtree(c, c.some.subtree)" in msg
+    assert_lazy_subtree_hint(msg)
 
 
 @pytest.mark.parametrize("override", ["first.a=2", "first.a:=2"])
@@ -210,7 +216,7 @@ def test_override_below_lazy_leaf_is_rejected_with_hint(override):
 
     msg = str(e.value)
     assert "Cannot override 'first.a': 'first' is a lazy leaf" in msg
-    assert "make_subtree(c, c.some.subtree)" in msg
+    assert_lazy_subtree_hint(msg)
 
 
 def test_reusable_subtree_builder_pattern_supports_overrides_and_new_leaves():
