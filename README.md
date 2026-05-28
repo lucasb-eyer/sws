@@ -54,7 +54,7 @@ If you want to make one field's value depend on another field's value, you can
 do so by wrapping the value in a `lambda`, which computes the derived value.
 This lambda will be called during finalization, where concrete config values
 can be accessed. In this way, in the example above, the `wd` setting will use
-the correct value of `c.lr` even when it is overriden by commandline arguments
+the correct value of `c.lr` even when it is overridden by commandline arguments
 during `finalize`. This works transitively, just as you'd expect it to.
 
 Since callable values receive this special treatment, if you want to actually
@@ -133,7 +133,7 @@ from interpreting `*` as wildcard, and (2) because I used spaces.
 For convenience, the keyname can be shortened to the shortest unique suffix
 across the _whole_ config (i.e. all nesting levels).
 For example, `model.head.lr` can be shortened to `head.lr` or `lr` if unambiguous.
-In the case of ambiguity, `sws` errs on the cautious side and error out.
+In the case of ambiguity, `sws` errs on the cautious side and errors out.
 You can always specify the full name starting with `c.` to be perfectly unambiguous.
 
 If there's a name that you use many times, and you'd like to set _all_ matching keys
@@ -257,7 +257,7 @@ See `example/sweep.fish` for a trivial sweep over a few values.
 
 ## Reusable subtrees
 
-As projects and config grows, you may want to write helper functions to populate subtrees.
+As projects and configs grow, you may want to write helper functions to populate subtrees.
 The `sws`-blessed way to do so, which ensures that all features work as expected without
 footguns, is creating the subtree "in-place" as follows:
 
@@ -304,7 +304,7 @@ are valid config *leaf values*, but that will *not* create a subtree from the di
 - Assigning a value to a group replaces its subtree (e.g. `c.model = "vit"` clears
   all `c.model.*`), and assigning a dict to a leaf replaces the leaf with a group.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
-- The `FinalConfig` has a `.to_json()` and `.to_flat_json()` utils that returns a
+- The `FinalConfig` has a `.to_json()` and `.to_flat_json()` utils that return a
   string that's the json serialized config, but with non-json-serializable values
   replaced by an explanatory string. It's for logging/storing of configs for humans.
 - Similarly, there's the `sws.from_json` and `sws.from_flat_json` counterparts, they
@@ -325,9 +325,6 @@ python -m pytest
 - When passing commandline args, using lazy/lambda makes no more sense.
   So we should lift the requirement for `Fn`-wrapping of callables here.
   `'log_fn=Fn(lambda s: print(f"Log: {s}"))'`.
-- finalization no more converts collections into tuples, sets into frozensets,
-  and expands dicts. If a lazy field returns a dict, it's just a dict.
-  Consider if this is good or bad, though it does sound obscure.
 
 Probably overkill:
 - Auto-generate a commandline --help?
@@ -349,7 +346,7 @@ Notable examples which I used but _did not_ like are [`gin`](https://github.com/
 they are too heavy, unpythonic, and magic; there be footguns.
 [fiddle](https://github.com/google/fiddle) requires your config to import everything,
 which I don't like.
-I refuse to built around types in Python, like pydantic, tyro, dataclasses, ..., so not even linking them.
+I refuse to build around types in Python, like pydantic, tyro, dataclasses, ..., so not even linking them.
 Finally, I haven't used, but thoroughly read [Pydra](https://github.com/jordan-benjamin/pydra)
 and [Cue](https://cuelang.org/docs/tour/), which together inspired the two-step
 approach with finalization.
