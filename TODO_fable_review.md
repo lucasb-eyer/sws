@@ -4,7 +4,7 @@
 
 ## Bugs (confirmed by repro)
 
-### 1. `finalize(argv)` permanently mutates the builder
+### 1. [fixed] `finalize(argv)` permanently mutates the builder
 
 Overrides are written into `self._store` (config.py:295, 385, 410), so the builder is polluted forever:
 
@@ -16,7 +16,7 @@ c.finalize().lr   # == 10, not 0.1!
 
 `test_simple` only passes because each later call re-overrides the same key. This breaks the natural mental model that finalize is a pure function of (builder, argv) — e.g. any "finalize once for a dry-run, then finalize for real" or sweep-in-process pattern silently reuses stale overrides. Fix: apply overrides to a copy of the store (or snapshot/restore).
 
-### 2. No `try/finally` in `finalize` → corrupted state after any failure
+### 2. [fixed] No `try/finally` in `finalize` → corrupted state after any failure
 
 `_phase` is only reset at the end (config.py:457) and `_cycle` is never cleared:
 

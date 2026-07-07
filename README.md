@@ -49,6 +49,7 @@ read-only `FinalConfig` object that contains "final" values for all fields.
 
 This *finalization* step can also integrate overrides from, for example,
 commandline arguments; more on that a little later.
+You can call `finalize(argv)` repeatedly; each call starts from the builder's original values.
 
 If you want to make one field's value depend on another field's value, you can
 do so by wrapping the value in a `lambda`, which computes the derived value.

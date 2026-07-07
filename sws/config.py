@@ -227,9 +227,24 @@ class Config(_BaseView):
     # Finalization to an immutable, resolved config
     def finalize(self, argv=None, return_unused_argv=False):
         """Resolve a write-only builder into an immutable, fully-evaluated config."""
-        assert not self._prefix, "Call `finalize` on the top-level config."
-        self._phase = "finalize"
+        if self._prefix:
+            raise ValueError("Call `finalize` on the top-level config.")
 
+        original_store = dict(self._store)
+        original_phase = self._phase
+        original_cycle = self._cycle
+        self._cycle = []
+
+        try:
+            self._phase = "finalize"
+            return self._finalize_current_store(argv, return_unused_argv)
+        finally:
+            self._store.clear()
+            self._store.update(original_store)
+            self._phase = original_phase
+            self._cycle = original_cycle
+
+    def _finalize_current_store(self, argv=None, return_unused_argv=False):
         # Apply overrides if provided. Support `key=value` for existing keys
         # (with suffix matching over leaves and group roots),
         # `..suffix=value` to set all matching leaves/group-roots by raw dotted-key suffix,
@@ -453,7 +468,6 @@ class Config(_BaseView):
         for key, value in resolved_store.items():
             _flatten_final_value(key, key, value, [])
 
-        self._phase = "building"
         final = FinalConfig(
             _store=finalized_store,
             _prefix=self._prefix

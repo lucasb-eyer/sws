@@ -34,6 +34,55 @@ def test_overrides_from_dict_like_base():
     assert f2.x == 1 and f2.y.z == 5
 
 
+def test_finalize_overrides_do_not_mutate_builder():
+    c = sws.Config(lr=0.1)
+    c.wd = lambda: c.lr * 0.5
+
+    overridden = c.finalize(["lr=10"])
+    original = c.finalize()
+
+    assert overridden.lr == 10
+    assert overridden.wd == 5
+    assert original.lr == 0.1
+    assert original.wd == 0.05
+
+
+def test_failed_finalize_restores_builder_phase_and_store():
+    c = sws.Config(lr=0.1)
+
+    with pytest.raises(AttributeError):
+        c.finalize(["unknown=1"])
+
+    with pytest.raises(TypeError):
+        _ = c.lr
+    assert c.finalize().lr == 0.1
+
+
+def test_failed_cycle_finalize_does_not_poison_retry():
+    c = sws.Config()
+    c.a = lambda: c.b
+    c.b = lambda: c.a
+
+    with pytest.raises(sws.CycleError):
+        c.finalize()
+
+    c.b = 1
+    assert c.finalize().a == 1
+
+
+def test_captured_subtree_view_sees_temporary_overrides():
+    c = sws.Config()
+    model = c.model
+    model.width = 128
+    c.half_width = lambda: model.width // 2
+
+    overridden = c.finalize(["model.width=64"])
+    original = c.finalize()
+
+    assert overridden.half_width == 32
+    assert original.half_width == 64
+
+
 def test_delete_via_subview_and_contains_on_view():
     c = sws.Config(model={"width": 128, "depth": 4})
     mv = c["model"]
