@@ -36,7 +36,7 @@ Config(msg="hello").finalize(['msg=use := for exact'])
 
 Fix: split on `=` first and treat a key ending in `:` as the exact-create form.
 
-### 4. Leaf/group ambiguity is not detected — README contract violation
+### 4. [fixed] Leaf/group ambiguity is not detected — README contract violation
 
 The README promises "In the case of ambiguity, sws errs on the cautious side and errors out", but leaf matches are consulted first and group roots only if *zero* leaves match (config.py:393-404):
 

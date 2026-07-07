@@ -405,21 +405,17 @@ class Config(_BaseView):
                     target = suffix
                 else:
                     leaf_matches = _segment_suffix_match(self._store, suffix)
-                    if len(leaf_matches) > 1:
-                        _raise_ambiguous(leaf_matches)
-                    if len(leaf_matches) == 1:
-                        target = leaf_matches[0]
+                    group_matches = _segment_suffix_match(_group_roots(), suffix)
+                    matches = sorted(set(leaf_matches) | set(group_matches))
+                    if len(matches) > 1:
+                        _raise_ambiguous(matches)
+                    if len(matches) == 1:
+                        target = matches[0]
                     else:
-                        group_matches = _segment_suffix_match(_group_roots(), suffix)
-                        if len(group_matches) > 1:
-                            _raise_ambiguous(group_matches)
-                        if len(group_matches) == 1:
-                            target = group_matches[0]
-                        else:
-                            lazy_key = _lazy_leaf_ancestor(suffix)
-                            if lazy_key is not None:
-                                _raise_lazy_leaf_descendant(raw_key, lazy_key)
-                            _raise_unknown()
+                        lazy_key = _lazy_leaf_ancestor(suffix)
+                        if lazy_key is not None:
+                            _raise_lazy_leaf_descendant(raw_key, lazy_key)
+                        _raise_unknown()
 
                 self._assign(target, parse_val(v))
 

@@ -52,6 +52,38 @@ def test_suffix():
     assert "thingy.lr" in msg
 
 
+def test_suffix_leaf_and_group_matches_are_ambiguous():
+    c = Config()
+    c.a.size = 1
+    c.b.size.w = 2
+
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["size=9"])
+
+    msg = str(e.value)
+    assert "Ambiguous override key 'size'" in msg
+    assert "a.size" in msg
+    assert "b.size" in msg
+
+
+def test_suffix_top_level_leaf_and_nested_group_are_ambiguous():
+    c = Config()
+    c.size = 1
+    c.model.size.w = 2
+
+    with pytest.raises(AttributeError) as e:
+        c.finalize(["size=9"])
+
+    msg = str(e.value)
+    assert "Ambiguous override key 'size'" in msg
+    assert "size" in msg
+    assert "model.size" in msg
+
+    f = c.finalize(["c.size=9"])
+    assert f.size == 9
+    assert f.model.size.w == 2
+
+
 def test_computed_nested_and_root():
     c = Config()
     c.model = {"lr": 1e-3, "wd": lambda: c.model.lr * 0.5}
