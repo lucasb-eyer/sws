@@ -285,21 +285,20 @@ class Config(_BaseView):
 
         unused = []
         for token in list(argv or []):
-            if ":=" in token:
-                k, v = token.split(":=", 1)
-                key = _validate_exact_override_key(k)
-                lazy_key = _lazy_leaf_ancestor(key)
-                if lazy_key is not None:
-                    _raise_lazy_leaf_descendant(k, lazy_key)
-                # Use internal assign to respect overwrite rules and allow mappings
-                self._assign(key, parse_val(v))
-                continue
-
             if "=" not in token:
                 unused.append(token)
                 continue
 
             raw_key, v = token.split("=", 1)
+            if raw_key.endswith(":"):
+                raw_key = raw_key[:-1]
+                key = _validate_exact_override_key(raw_key)
+                lazy_key = _lazy_leaf_ancestor(key)
+                if lazy_key is not None:
+                    _raise_lazy_leaf_descendant(raw_key, lazy_key)
+                # Use internal assign to respect overwrite rules and allow mappings
+                self._assign(key, parse_val(v))
+                continue
 
             # Find the keys or group-roots which have this suffix. If multiple, provide error.
             suffix = raw_key.removeprefix("c.")

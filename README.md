@@ -146,6 +146,8 @@ the suffix `.lr`.
 Finally, the syntax `name:=value` creates the exact field `c.name` even if it does not exist.
 This can be useful when the codebase uses the pattern `c.get("name", default)` for things,
 and the `get_config` doesn't include a value for `name`. Use with care though.
+The `:=` marker is only recognized between the key and value, so normal override
+values may contain `:=` as plain text.
 
 ## `sws.run` and suggested code structure
 

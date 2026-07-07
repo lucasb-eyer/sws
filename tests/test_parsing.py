@@ -200,6 +200,15 @@ def test_create_or_set_with_walrus_rejects_wildcards_and_empty_segments():
         assert f"Use '=' for wildcard matching, for example {key}=VALUE." in msg
 
 
+def test_normal_override_value_may_contain_walrus_text():
+    c = Config(msg="hello")
+
+    f = c.finalize(["msg=use := for exact overrides"])
+
+    assert f.msg == "use := for exact overrides"
+    assert f.to_flat_dict() == {"msg": "use := for exact overrides"}
+
+
 def test_override_prefers_exact_key_when_using_c_prefix():
     c = Config()
     c.foo = 1
