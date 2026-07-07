@@ -427,7 +427,15 @@ class Config(_BaseView):
         resolved_store = {k: self[k] for k in self._store}
         finalized_store = {}
 
+        def _is_argv_override_key(key):
+            return getattr(self._store.get(key), "_sws_argv_override", False)
+
         def _flatten_final_value(source_key, dest_key, value, cycle):
+            if _is_argv_override_key(source_key) and isinstance(value, Mapping):
+                for child_dest, child_val in _flatten(dest_key, value):
+                    _flatten_final_value(source_key, child_dest, child_val, cycle)
+                return
+
             if isinstance(value, Config):
                 if value._store is not self._store:
                     raise LazySubtreeError(

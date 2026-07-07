@@ -118,6 +118,52 @@ def test_overrides_nested():
     assert f1.model.depth == 8
 
 
+def test_override_dict_value_is_unpacked_like_config_assignment():
+    c = Config(foo=dict(bar=1, baz=2))
+
+    f = c.finalize(["foo=dict(a=10, b=20)"])
+
+    assert f.foo.a == 10
+    assert f.foo.b == 20
+    assert f.to_flat_dict() == {"foo.a": 10, "foo.b": 20}
+
+
+def test_exact_create_dict_value_is_unpacked_like_config_assignment():
+    c = Config(lr=0.1)
+
+    f = c.finalize(["lol:=dict(a=10, b=c.lr)", "lr=0.2"])
+
+    assert f.lol.a == 10
+    assert f.lol.b == 0.2
+    assert f.lr == 0.2
+
+
+def test_wildcard_group_override_dict_value_is_unpacked():
+    c = Config()
+    c.left.params.x = 1
+    c.right.params.x = 2
+
+    f = c.finalize(["...params=dict(a=10, b=20)"])
+
+    assert f.left.params.a == 10
+    assert f.left.params.b == 20
+    assert f.right.params.a == 10
+    assert f.right.params.b == 20
+    assert "left.params.x" not in f.to_flat_dict()
+    assert "right.params.x" not in f.to_flat_dict()
+
+
+def test_user_lazy_returning_dict_stays_dict_leaf():
+    c = Config()
+    c.foo = lambda: dict(a=10, b=20)
+
+    f = c.finalize()
+
+    assert f.foo == {"a": 10, "b": 20}
+    with pytest.raises(AttributeError):
+        _ = f.foo.a
+
+
 def test_overrides_inexistent():
     c = Config(lr=0.1, model=dict(width=128, depth=4))
     with pytest.raises(AttributeError):

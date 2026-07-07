@@ -88,7 +88,7 @@ Concurrent `finalize` calls on the same builder share `_state` (`phase`, `cycle`
 - A lazy that raises gives **no key context** (`TypeError: can't multiply sequence...` — which of your 200 fields?). Wrap the *top-level* resolution loop (config.py:413) with `raise FinalizeError(f"while resolving {key!r}") from e` — only the outer loop, so `getattr(c, "y", default)`'s KeyError semantics inside lambdas stay intact.
 - Unknown/ambiguous override keys raise `AttributeError`, which is a strange type for CLI parse errors and easy to catch accidentally. A dedicated `OverrideError(FinalizeError)` would be a kinder public API.
 - `Fn` is only unwrapped when it's the direct leaf value: `c.callbacks = [Fn(f), Fn(g)]` finalizes to a list of `Fn` wrapper objects, not functions.
-- CLI `model={'width': 64}` on an existing *group* replaces it with a plain-dict **leaf**, so `f.model.width` becomes `AttributeError` while `f.model["width"]` works — different shape than the same assignment in code, which creates a subtree.
+- [fixed] CLI `model={'width': 64}` on an existing *group* replaces it with a plain-dict **leaf**, so `f.model.width` becomes `AttributeError` while `f.model["width"]` works — different shape than the same assignment in code, which creates a subtree.
 - `finalize` on a subview is guarded by `assert` (config.py:230) — vanishes under `python -O`; make it a real exception.
 - `c.to_dict()` / `in` work during building — a documented-by-test read loophole in the "write-only" story; fine, but maybe say so in the README.
 

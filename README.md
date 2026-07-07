@@ -130,6 +130,9 @@ library. This makes a lot of Python code just work, for example you can write
 current config using the name `c`, so something like `'c.model.width=3 * c.model.depth'`
 works. Note that I quoted the whole thing, for two reasons: (1) to stop my shell
 from interpreting `*` as wildcard, and (2) because I used spaces.
+After an override key is resolved and its value is evaluated, the value is assigned
+with the same shape rules as config construction: dicts create subtrees, leaves
+replace groups, and groups replace leaves.
 
 For convenience, the keyname can be shortened to the shortest unique suffix
 across the _whole_ config (i.e. all nesting levels).
