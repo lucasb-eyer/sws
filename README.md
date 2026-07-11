@@ -139,6 +139,12 @@ from interpreting `*` as wildcard, and (2) because I used spaces.
 After an override key is resolved and its value is evaluated, the value is assigned
 with the same shape rules as config construction: dicts create subtrees, leaves
 replace groups, and groups replace leaves.
+One caveat: override values are only evaluated at the end of finalization, so the
+children of a dict-valued override (like `model=dict(width=64)`) do not exist yet
+while the remaining arguments are processed. Targeting them in the same argv
+(like a subsequent `model.width=128`) is therefore an error; adjust the dict
+expression itself instead. (A subsequent `model.width:=128` follows the usual
+shape rules: creating that exact key replaces the `model` leaf wholesale.)
 
 For convenience, the keyname can be shortened to the shortest unique suffix
 across the _whole_ config (i.e. all nesting levels).

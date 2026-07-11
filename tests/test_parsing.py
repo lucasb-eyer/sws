@@ -290,6 +290,20 @@ def test_create_or_set_with_walrus_rejects_empty_key(token):
     assert c.finalize().to_flat_dict() == {"x": 1}
 
 
+@pytest.mark.parametrize("child", ["model.width=128", "c.model.width=128"])
+def test_children_of_same_argv_dict_override_are_rejected_with_hint(child):
+    # A dict-valued override stays a single lazy leaf until finalization, so
+    # its children cannot be targeted by later '=' tokens in the same argv.
+    # This must fail with an explanation, not a generic unknown-key error.
+    # (':=' keeps its documented shape rule: it replaces the leaf wholesale.)
+    c = Config(model=dict(depth=4))
+
+    with pytest.raises(sws.OverrideError, match="already set by an earlier override") as e:
+        c.finalize(["model=dict(width=64, alpha=1)", child])
+
+    assert "'model'" in str(e.value)
+
+
 def test_normal_override_value_may_contain_walrus_text():
     c = Config(msg="hello")
 

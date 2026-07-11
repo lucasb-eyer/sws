@@ -412,6 +412,23 @@ class Config(_BaseView):
                 + _reusable_subtree_hint()
             )
 
+        def _argv_override_ancestor(key_suffix):
+            for k, v_existing in self._store.items():
+                if not getattr(v_existing, "_sws_argv_override", False):
+                    continue
+                if key_suffix.startswith(k + "."):
+                    return k
+            return None
+
+        def _raise_argv_override_descendant(raw_key, ancestor):
+            raise OverrideError(
+                f"Cannot override {raw_key!r}: {ancestor!r} was already set by an "
+                "earlier override in the same argv, and if that value is a dict, "
+                "its children only come into existence at the end of finalization. "
+                f"To adjust a child, change the {ancestor!r} override itself, "
+                f"e.g. {ancestor}=dict(...)."
+            )
+
         unused = []
         for token in list(argv or []):
             if "=" not in token:
@@ -520,6 +537,9 @@ class Config(_BaseView):
                         lazy_key = _lazy_leaf_ancestor(suffix)
                         if lazy_key is not None:
                             _raise_lazy_leaf_descendant(raw_key, lazy_key)
+                        ancestor = _argv_override_ancestor(suffix)
+                        if ancestor is not None:
+                            _raise_argv_override_descendant(raw_key, ancestor)
                         _raise_unknown()
                 else:
                     leaf_matches = _segment_suffix_match(self._store, suffix)
@@ -533,6 +553,9 @@ class Config(_BaseView):
                         lazy_key = _lazy_leaf_ancestor(suffix)
                         if lazy_key is not None:
                             _raise_lazy_leaf_descendant(raw_key, lazy_key)
+                        ancestor = _argv_override_ancestor(suffix)
+                        if ancestor is not None:
+                            _raise_argv_override_descendant(raw_key, ancestor)
                         _raise_unknown()
 
                 self._assign(target, parse_val(v))
