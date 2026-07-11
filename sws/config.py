@@ -399,10 +399,14 @@ class Config(_BaseView):
                     self._assign(target, parsed)
             else:
                 # Exact match when explicitly prefixed with c.
-                if explicit and suffix in self._store:
-                    target = suffix
-                elif explicit and suffix in _group_roots():
-                    target = suffix
+                if explicit:
+                    if suffix in self._store or suffix in _group_roots():
+                        target = suffix
+                    else:
+                        lazy_key = _lazy_leaf_ancestor(suffix)
+                        if lazy_key is not None:
+                            _raise_lazy_leaf_descendant(raw_key, lazy_key)
+                        _raise_unknown()
                 else:
                     leaf_matches = _segment_suffix_match(self._store, suffix)
                     group_matches = _segment_suffix_match(_group_roots(), suffix)

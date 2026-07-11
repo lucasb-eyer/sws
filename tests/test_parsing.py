@@ -299,6 +299,17 @@ def test_override_prefers_exact_key_when_using_c_prefix():
     assert f.bar.baz.foo == 2
 
 
+@pytest.mark.parametrize("override", ["c.foo=32", "c.head=32"])
+def test_c_prefix_rejects_nonexistent_path_instead_of_suffix_matching(override):
+    c = Config()
+    c.model.head.foo = 1
+
+    with pytest.raises(AttributeError, match="Unknown override key"):
+        c.finalize([override])
+
+    assert c.finalize().model.head.foo == 1
+
+
 def test_override_c_reference_tracks_late_assignments():
     c = Config(lr=0.1, ratio=0.0)
     f = c.finalize(["ratio=c.lr", "lr=0.2"])
