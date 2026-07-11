@@ -204,12 +204,16 @@ class Config(_BaseView):
                 return val
 
             # val is callable, so it was a lazy. Resolve it, but careful of cycles.
+            # Pop in a finally: if val() raises and the error is caught (e.g. by
+            # argv override parsing), a stale entry would make a later resolution
+            # of this key look like a cycle.
             self._cycle.append(full)
-            if self._cycle.count(full) > 1:  # Oops, we have a cycle!
-                raise CycleError(f"Cycle detected: {' -> '.join(self._cycle)}")
-            v = val()
-            self._cycle.pop()
-            return v
+            try:
+                if self._cycle.count(full) > 1:  # Oops, we have a cycle!
+                    raise CycleError(f"Cycle detected: {' -> '.join(self._cycle)}")
+                return val()
+            finally:
+                self._cycle.pop()
         else:
             assert False, f"Internal bug: {self._phase}"
 

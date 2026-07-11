@@ -150,6 +150,20 @@ def test_finalize_config_alias_cycles_are_detected():
         c.finalize()
 
 
+def test_raising_lazy_does_not_fake_cycle():
+    # A lazy that raises used to leave a stale entry in the cycle-tracking
+    # state when the error was swallowed (as argv override parsing does),
+    # so a later, perfectly ordinary resolution of the same key raised a
+    # false CycleError instead of surfacing the real error.
+    c = sws.Config()
+    c.a = 1
+    c.z = lambda: c.a * 2
+    c.bad = lambda: 1 / 0
+
+    with pytest.raises(ZeroDivisionError):
+        c.finalize(["a=c.bad"])
+
+
 def test_overrides_boolean_and_list_eval():
     base = sws.Config(flag=False, lst=[1])
     f = base.finalize(["flag=True", "lst=[1,2,3]"])
