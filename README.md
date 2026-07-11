@@ -288,16 +288,15 @@ Depending on your background, you may have defaulted to the following constructi
 which does *not* work and is not possible for `sws` to support without dangerous footguns:
 
 ```python
-def make_tokenizer(name):  # DON'T
+def make_tokenizer():  # DON'T
     c = Config()
-    c.path = f"/foo/bar/{name}" if name != "magic" else "/the/magic"
-    c.regex = r"\d+" if name == "magic" else "default"
+    c.path = "/foo/bar/tokenizer.model"
+    c.regex = lambda: rf"{c.path}:\d+"
     return c
 
 c = Config()
-c.voc = "not magic 123"
-c.data.tokenizer = make_tokenizer(c.voc)  # NOT RIGHT
-c.data.tokenizer = lambda: make_tokenizer(c.voc)  # NOT RIGHT EITHER
+c.data.tokenizer = make_tokenizer()  # NOT RIGHT
+c.data.tokenizer = lambda: make_tokenizer()  # NOT RIGHT EITHER
 ```
 
 Since this is the first intuition for some people, `sws` detects this pattern and

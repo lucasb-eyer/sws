@@ -31,6 +31,17 @@ class Fn:
         self.fn = fn
 
 
+def _reusable_subtree_hint():
+    return (
+        "Reusable subtrees should be built by writing into a subtree view during "
+        "config construction, for example:\n"
+        "    def make_foobar(c, cf):\n"
+        "        cf.baz = lambda: c.thingy + 2\n"
+        "    make_foobar(c, c.foo.bar)\n"
+        "The way you are trying to do it is full of footguns, which is against sws design."
+    )
+
+
 class _BaseView:
     """Internal mixin for shared view behavior over a flat store with prefix."""
 
@@ -179,6 +190,14 @@ class Config(_BaseView):
             lazy_fields = [key for key, item in flat_value.items() if callable(item)]
             if lazy_fields:
                 fields = ", ".join(repr(key) for key in lazy_fields)
+                if value._base_store is not self._base_store:
+                    raise LazySubtreeError(
+                        f"Cannot assign a separate sws.Config to {full!r}: it "
+                        f"contains lazy field(s) {fields}. Lazy closures from a "
+                        "separate builder cannot be safely retargeted and may still "
+                        "read that write-only builder during finalization.\n"
+                        + _reusable_subtree_hint()
+                    )
                 raise LazySubtreeError(
                     f"Cannot assign Config view to {full!r}: it contains lazy "
                     f"field(s) {fields}. Copying lazy fields would preserve closures "
@@ -304,16 +323,6 @@ class Config(_BaseView):
                 raise AttributeError(msg)
             return key
 
-        def _lazy_subtree_hint():
-            return (
-                "Reusable subtrees should be built by writing into a subtree view during "
-                "config construction, for example:\n"
-                "    def make_foobar(c, cf):\n"
-                "        cf.baz = lambda: c.thingy + 2\n"
-                "    make_foobar(c, c.foo.bar)\n"
-                "The way you are trying to do it is full of footguns, which is against sws design."
-            )
-
         def _lazy_leaf_ancestor(key_suffix):
             for k, v_existing in sorted(self._store.items(), key=lambda kv: -len(kv[0])):
                 if isinstance(v_existing, Fn) or not callable(v_existing):
@@ -329,7 +338,7 @@ class Config(_BaseView):
                 f"Cannot override {raw_key!r}: {lazy_key!r} is a lazy leaf, "
                 "so its children are not known config keys. Lazy values are not "
                 "supported for declaring new overridable subtrees.\n"
-                + _lazy_subtree_hint()
+                + _reusable_subtree_hint()
             )
 
         unused = []
@@ -476,7 +485,7 @@ class Config(_BaseView):
                         f"Lazy field {source_key!r} returned a new sws.Config. "
                         "Lazy values may alias an existing subtree, but they cannot "
                         "declare new overridable subtrees.\n"
-                        + _lazy_subtree_hint()
+                        + _reusable_subtree_hint()
                     )
 
                 if source_key in cycle:

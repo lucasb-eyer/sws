@@ -206,6 +206,27 @@ def test_lazy_returning_fresh_config_is_rejected_with_hint():
     assert_lazy_subtree_hint(msg)
 
 
+def test_direct_fresh_config_assignment_is_rejected_with_hint():
+    def make_first():
+        cf = Config()
+        cf.a = 3
+        cf.b = lambda: cf.a + 1
+        return cf
+
+    c = Config()
+
+    with pytest.raises(LazySubtreeError) as e:
+        c.first = make_first()
+
+    msg = str(e.value)
+    assert "Cannot assign a separate sws.Config to 'first'" in msg
+    assert "lazy field(s) 'b'" in msg
+    assert "cannot be safely retargeted" in msg
+    assert "write-only builder during finalization" in msg
+    assert_lazy_subtree_hint(msg)
+    assert c.finalize().to_dict() == {}
+
+
 @pytest.mark.parametrize("override", ["first.a=2", "first.a:=2"])
 def test_override_below_lazy_leaf_is_rejected_with_hint(override):
     c = Config()
