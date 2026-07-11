@@ -343,6 +343,23 @@ def test_fn_wraps_callable_as_value():
     assert f.greet("bob") == "hi bob"
 
 
+def test_fn_unwrapped_inside_containers():
+    def f():
+        return 1
+
+    def g():
+        return 2
+
+    c = sws.Config()
+    c.callbacks = [sws.Fn(f), (sws.Fn(g),)]
+    c.by_name = lambda: {"f": sws.Fn(f)}  # a dict returned by a lazy stays a leaf
+    final = c.finalize()
+
+    assert final.callbacks[0] is f
+    assert final.callbacks[1][0] is g
+    assert final.by_name["f"] is f
+
+
 def test_bare_callable_requires_fn_or_zero_arg():
     c = sws.Config()
 

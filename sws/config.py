@@ -139,6 +139,37 @@ def _copy_container_graph(value):
     return deepcopy(value, memo)
 
 
+def _unwrap_fns(value, memo):
+    """Recursively unwrap Fn markers inside containers at the finalize boundary.
+
+    Containers holding no Fn are returned as-is, so leaf identity, aliasing,
+    and Mapping subclasses are preserved unless an Fn forces a rebuild.
+    """
+    if isinstance(value, Fn):
+        return value.fn
+    if id(value) in memo:
+        return memo[id(value)]
+    if isinstance(value, Mapping):
+        new = {k: _unwrap_fns(v, memo) for k, v in value.items()}
+        changed = any(a is not b for a, b in zip(new.values(), value.values()))
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        items = [_unwrap_fns(v, memo) for v in value]
+        changed = any(a is not b for a, b in zip(items, value))
+        if isinstance(value, list):
+            new = items
+        elif isinstance(value, tuple):
+            new = tuple(items)
+        elif isinstance(value, set):
+            new = set(items)
+        else:
+            new = frozenset(items)
+    else:
+        return value
+    result = new if changed else value
+    memo[id(value)] = result
+    return result
+
+
 def _export_value(value):
     if isinstance(value, _BaseView):
         return value.to_dict()
@@ -509,6 +540,7 @@ class Config(_BaseView):
         # Now go over all items and resolve those that were lazy.
         resolved_store = {k: self[k] for k in self._store}
         finalized_store = {}
+        unwrap_memo = {}  # Shared so containers aliased across keys stay aliased.
 
         def _is_argv_override_key(key):
             return getattr(self._store.get(key), "_sws_argv_override", False)
@@ -554,7 +586,7 @@ class Config(_BaseView):
                     finalized_store[child_dest] = child_val
                 return
 
-            finalized_store[dest_key] = value
+            finalized_store[dest_key] = _unwrap_fns(value, unwrap_memo)
 
         for key, value in resolved_store.items():
             _flatten_final_value(key, key, value, [])
