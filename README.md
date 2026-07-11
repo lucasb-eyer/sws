@@ -303,6 +303,13 @@ c.data.tokenizer = lambda: make_tokenizer(c.voc)  # NOT RIGHT EITHER
 Since this is the first intuition for some people, `sws` detects this pattern and
 gives an error message hinting to the blessed way.
 
+Copying an existing subtree view, such as `c.model2 = c.model1`, is supported
+only when all fields in the source subtree are eager values. `sws` rejects the
+assignment if the source contains lazy fields: their Python closures would still
+refer to the original subtree, so the copy could silently compute wrong values.
+Populate both destination views in place instead. Assigning an empty subtree view
+is also rejected because it has no fields to copy.
+
 Note that a function returning plain python dictionaries works, since dictionaries
 are valid config *leaf values*, but that will *not* create a subtree from the dict.
 

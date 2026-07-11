@@ -168,7 +168,26 @@ class Config(_BaseView):
 
     def _assign(self, full, value):
         # Assign value at 'full'; if it's a mapping/Config, flatten under that prefix.
-        if isinstance(value, _BaseView):
+        if isinstance(value, Config):
+            flat_value = value.to_flat_dict()
+            if not flat_value:
+                raise ValueError(
+                    f"Cannot assign empty Config view to {full!r}; "
+                    "an empty view has no fields to copy."
+                )
+
+            lazy_fields = [key for key, item in flat_value.items() if callable(item)]
+            if lazy_fields:
+                fields = ", ".join(repr(key) for key in lazy_fields)
+                raise LazySubtreeError(
+                    f"Cannot assign Config view to {full!r}: it contains lazy "
+                    f"field(s) {fields}. Copying lazy fields would preserve closures "
+                    "that refer to the source subtree and can silently produce wrong "
+                    "values. Populate the destination subtree in place instead."
+                )
+
+            value = value.to_dict()
+        elif isinstance(value, _BaseView):
             value = value.to_dict()
         if isinstance(value, Mapping):
             if full in self._store:

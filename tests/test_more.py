@@ -247,10 +247,36 @@ def test_overrides_boolean_and_list_eval():
     assert f.flag is True and f.lst == [1, 2, 3]
 
 
-def test_bug1():
+def test_assigning_empty_config_view_is_rejected():
     c = sws.Config()
-    c.a = c.b
-    assert c.finalize().to_dict() == {}
+    with pytest.raises(ValueError, match="Cannot assign empty Config view"):
+        c.a = c.b
+
+
+def test_assigning_eager_config_view_copies_its_values():
+    c = sws.Config()
+    c.m1.width = 100
+    c.m1.depth = 4
+    c.m2 = c.m1
+
+    final = c.finalize(["m2.width=60"])
+    assert final.m1.to_dict() == {"width": 100, "depth": 4}
+    assert final.m2.to_dict() == {"width": 60, "depth": 4}
+
+
+def test_assigning_lazy_config_view_is_rejected_before_stale_closure_copy():
+    c = sws.Config()
+    c.m1.width = 100
+    c.m1.dim = lambda: c.m1.width // 2
+
+    with pytest.raises(sws.LazySubtreeError) as exc_info:
+        c.m2 = c.m1
+
+    message = str(exc_info.value)
+    assert "Cannot assign Config view to 'm2'" in message
+    assert "'dim'" in message
+    assert "preserve closures" in message
+    assert c.finalize().to_dict() == {"m1": {"width": 100, "dim": 50}}
 
 
 def test_bug2():
