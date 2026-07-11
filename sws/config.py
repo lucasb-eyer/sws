@@ -1,3 +1,4 @@
+import ast
 from collections.abc import Mapping
 from contextvars import ContextVar
 from copy import copy, deepcopy
@@ -5,7 +6,7 @@ import difflib
 import json
 import os
 
-from .simpleeval import EvalWithCompoundTypes
+from .simpleeval import EvalWithCompoundTypes, NameNotDefined
 
 
 class FinalizeError(Exception):
@@ -375,12 +376,53 @@ class Config(_BaseView):
         # and `key:=value` to create-or-set an exact dotted key
         # (no suffix matching, creates if missing).
         evaluator = EvalWithCompoundTypes(names={"c": self}, functions={"Fn": Fn, "range": range})
-        def parse_val(val):
+
+        def parse_val(raw_key, val):
+            # A value token only becomes a literal string if the evaluator
+            # either can't read it (not valid Python: 'hello world', '/a/path')
+            # or doesn't recognize its words (only undefined bare names:
+            # 'imagenet_2012', 'gpt-4'). Every other evaluation failure means
+            # the token was clearly meant as an expression, so it raises
+            # instead of silently becoming a string.
+            hint = {"true": "True", "false": "False",
+                    "none": "None", "null": "None"}.get(val.strip().lower())
+            if hint is not None and val.strip() != hint:
+                raise OverrideError(
+                    f"Override value {val!r} for key {raw_key!r} would be the "
+                    f"*string* {val.strip()!r}; did you mean {hint}?")
+
+            try:
+                tree = ast.parse(val, mode="eval")
+            except SyntaxError:
+                tree = None
+            mentions_c = tree is not None and any(
+                isinstance(node, ast.Name) and node.id == "c"
+                for node in ast.walk(tree))
+
             def _lazy():
+                if tree is None:
+                    _lazy._sws_string_fallback = True
+                    return val
                 try:
                     return evaluator.eval(val)
-                except Exception:
+                except FinalizeError:
+                    raise  # E.g. cycles or nested failures; already have context.
+                except NameNotDefined as error:
+                    if mentions_c:
+                        raise OverrideError(
+                            f"Override value {val!r} for key {raw_key!r} "
+                            f"references 'c' but failed to evaluate: {error}"
+                        ) from error
+                    _lazy._sws_string_fallback = True
                     return val
+                except Exception as error:
+                    raise OverrideError(
+                        f"Override value {val!r} for key {raw_key!r} is a valid "
+                        f"Python expression, but evaluating it failed "
+                        f"({type(error).__name__}: {error}). If you meant to "
+                        f"pass it as a string, quote it: {raw_key}=\"'{val}'\""
+                    ) from error
+
             _lazy._sws_argv_override = True
             return _lazy
 
@@ -443,7 +485,7 @@ class Config(_BaseView):
                 if lazy_key is not None:
                     _raise_lazy_leaf_descendant(raw_key, lazy_key)
                 # Use internal assign to respect overwrite rules and allow mappings
-                self._assign(key, parse_val(v))
+                self._assign(key, parse_val(raw_key, v))
                 continue
 
             # Find the keys or group-roots which have this suffix. If multiple, provide error.
@@ -525,7 +567,7 @@ class Config(_BaseView):
                     unknown = suffix[1:] if suffix.startswith(".") else suffix
                     _raise_unknown(unknown)
 
-                parsed = parse_val(v)
+                parsed = parse_val(raw_key, v)
                 for target in targets:
                     self._assign(target, parsed)
             else:
@@ -558,7 +600,7 @@ class Config(_BaseView):
                             _raise_argv_override_descendant(raw_key, ancestor)
                         _raise_unknown()
 
-                self._assign(target, parse_val(v))
+                self._assign(target, parse_val(raw_key, v))
 
         # Now go over all items and resolve those that were lazy.
         resolved_store = {k: self[k] for k in self._store}

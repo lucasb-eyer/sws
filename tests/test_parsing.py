@@ -350,10 +350,49 @@ def test_order_independent_new_keys_with_c_reference():
     assert f.xid == 32 and f.wid == 11
 
 
-def test_override_c_reference_missing_key_keeps_string():
+def test_override_c_reference_missing_key_raises():
+    # Used to silently keep the raw string; a value mentioning `c` is clearly
+    # an expression, so its failure must surface.
     c = Config()
-    f = c.finalize(["name:=f'hi-{c.xid}'"])
-    assert f.name == "f'hi-{c.xid}'"
+    with pytest.raises(sws.OverrideError, match="evaluating it failed"):
+        c.finalize(["name:=f'hi-{c.xid}'"])
+
+
+@pytest.mark.parametrize("token,expected", [
+    ("name=vit", "vit"),                        # bare word
+    ("name=imagenet_2012", "imagenet_2012"),    # bare word with digits
+    ("name=gpt-4", "gpt-4"),                    # parses as `gpt - 4`, gpt unknown
+    ("name=my-run/v2", "my-run/v2"),            # only unknown names and operators
+    ("name=hello world", "hello world"),        # not valid Python
+    ("name=/data/foo.txt", "/data/foo.txt"),    # not valid Python
+    ("name=gs://bucket/x", "gs://bucket/x"),    # not valid Python
+])
+def test_override_stringish_values_work_unquoted(token, expected):
+    assert Config(name="x").finalize([token]).name == expected
+
+
+@pytest.mark.parametrize("token,match", [
+    ("x=1/0", "ZeroDivisionError"),              # broken arithmetic
+    ("x=c.typo + 1", "typo"),                    # typo'd config reference
+    ("x=foo + c.lr", "references 'c'"),          # mentions c, other name unknown
+    ('x=[ord(ch) for ch in "hi"]', "ord"),       # unknown function
+    ("x=true", "did you mean True"),             # bool/none typo traps
+    ("x=false", "did you mean False"),
+    ("x=none", "did you mean None"),
+    ("x=NULL", "did you mean None"),
+])
+def test_override_failed_expressions_raise(token, match):
+    c = Config(x=1, lr=0.1)
+    with pytest.raises(sws.OverrideError, match=match):
+        c.finalize([token])
+
+    # And the builder is still usable afterwards.
+    assert c.finalize().x == 1
+
+
+def test_override_proper_literals_still_evaluate():
+    f = Config(a=0, b=1, s="x").finalize(["a=True", "b=None", "s='quoted'"])
+    assert f.a is True and f.b is None and f.s == "quoted"
 
 
 def test_override_wildcard_sets_all_matching_leaves_by_raw_suffix():

@@ -139,6 +139,16 @@ library. This makes a lot of Python code just work, for example you can write
 current config using the name `c`, so something like `'c.model.width=3 * c.model.depth'`
 works. Note that I quoted the whole thing, for two reasons: (1) to stop my shell
 from interpreting `*` as wildcard, and (2) because I used spaces.
+
+At the same time, string values just work without quoting: a value that is not
+valid Python (`msg=hello world`, `path=/data/foo`) or consists only of unknown
+bare words (`dataset=imagenet_2012`, `arch=gpt-4`) is taken as a literal string.
+Anything else that fails to evaluate is an error, not a string: broken
+expressions (`lr=1/0`), unknown functions, and anything mentioning `c`
+(so `wd=c.lrr * 0.1` reports the typo instead of silently assigning a string).
+The common typos `true`/`false`/`none`/`null` error with a hint towards the
+Python spelling. To force a string that would otherwise evaluate, quote it
+for Python too: `name="'True'"`.
 Expressions referencing `c` see the *final* config values, after *all* overrides
 are applied — including overrides that appear later in the argument list — so the
 result does not depend on the order of the arguments.
