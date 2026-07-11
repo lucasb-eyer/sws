@@ -280,6 +280,16 @@ def test_create_or_set_with_walrus_rejects_wildcards_and_empty_segments():
         assert f"Use '=' for wildcard matching, for example {key}=VALUE." in msg
 
 
+@pytest.mark.parametrize("token", [":=2", "c.:=2"])
+def test_create_or_set_with_walrus_rejects_empty_key(token):
+    c = Config(x=1)
+
+    with pytest.raises(sws.OverrideError, match="Invalid exact override key"):
+        c.finalize([token])
+
+    assert c.finalize().to_flat_dict() == {"x": 1}
+
+
 def test_normal_override_value_may_contain_walrus_text():
     c = Config(msg="hello")
 

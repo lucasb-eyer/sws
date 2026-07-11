@@ -355,7 +355,7 @@ class Config(_BaseView):
 
         def _validate_exact_override_key(raw_key):
             key = raw_key.removeprefix("c.")
-            if key.startswith(".") or ".." in key or key.endswith("."):
+            if not key or key.startswith(".") or ".." in key or key.endswith("."):
                 msg = f"Invalid exact override key {raw_key!r}. "
                 msg += "':=' requires an explicit dotted path with non-empty segments and "
                 msg += "does not support wildcard prefixes like '..' or '...'. "
