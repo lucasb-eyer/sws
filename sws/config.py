@@ -606,6 +606,14 @@ class Config(_BaseView):
         resolved_store = {k: self[k] for k in self._store}
         finalized_store = {}
         unwrap_memo = {}  # Shared so containers aliased across keys stay aliased.
+        argv_provenance = {}
+
+        def _record(dest_key, source_key, value):
+            finalized_store[dest_key] = value
+            source = self._store.get(source_key)
+            if getattr(source, "_sws_argv_override", False):
+                fell_back = getattr(source, "_sws_string_fallback", False)
+                argv_provenance[dest_key] = "argv, as string" if fell_back else "argv"
 
         def _is_argv_override_key(key):
             return getattr(self._store.get(key), "_sws_argv_override", False)
@@ -648,17 +656,18 @@ class Config(_BaseView):
             if isinstance(value, FinalConfig):
                 for rel, child_val in value.to_flat_dict().items():
                     child_dest = f"{dest_key}.{rel}" if rel else dest_key
-                    finalized_store[child_dest] = child_val
+                    _record(child_dest, source_key, child_val)
                 return
 
-            finalized_store[dest_key] = _unwrap_fns(value, unwrap_memo)
+            _record(dest_key, source_key, _unwrap_fns(value, unwrap_memo))
 
         for key, value in resolved_store.items():
             _flatten_final_value(key, key, value, [])
 
         final = FinalConfig(
             _store=_copy_container_graph(finalized_store),
-            _prefix=self._prefix
+            _prefix=self._prefix,
+            _provenance=argv_provenance,
         )
 
         if return_unused_argv:
@@ -674,10 +683,13 @@ def json_invalid_to_string(obj):
 class FinalConfig(_BaseView):
     """Final, read-only config with flat store and prefix views."""
 
-    def __init__(self, _store, _prefix="", _subtree_prefixes=None):
+    def __init__(self, _store, _prefix="", _subtree_prefixes=None, _provenance=None):
         object.__setattr__(self, "_store", _store)
         object.__setattr__(self, "_prefix", _prefix if _prefix else "")
         object.__setattr__(self, "_subtree_prefixes", _subtree_prefixes)
+        # Maps full keys to a short origin note (e.g. "argv"), only used
+        # to annotate the pretty-printer output.
+        object.__setattr__(self, "_provenance", _provenance)
 
     # _full, to_dict, to_flat_dict, __len__ from _BaseView
 
@@ -721,7 +733,8 @@ class FinalConfig(_BaseView):
             return self._store[full]
         prefix = full + "."
         if self._has_subtree(full):
-            return FinalConfig(self._store, prefix, self._subtree_prefixes)
+            return FinalConfig(self._store, prefix, self._subtree_prefixes,
+                               self._provenance)
         raise KeyError(key)
 
     def get(self, key, default=None):
@@ -762,6 +775,7 @@ class FinalConfig(_BaseView):
         flat = self.to_flat_dict()
         if not flat:
             return "{}"
+        provenance = self._provenance or {}
         lines = []
         for full_key in sorted(flat):
             parts = full_key.split(".")
@@ -769,7 +783,10 @@ class FinalConfig(_BaseView):
                 disp = _bold(parts[0])
             else:
                 disp = _dim(".".join(parts[:-1]) + ".") + _bold(parts[-1])
-            lines.append(f"{disp}: {_blue(_fmt_val(flat[full_key]))}")
+            line = f"{disp}: {_blue(_fmt_val(flat[full_key]))}"
+            if (origin := provenance.get(f"{self._prefix}{full_key}")) is not None:
+                line += " " + _dim(f"({origin})")
+            lines.append(line)
         return "\n".join(lines)
 
     def to_json(self, default=json_invalid_to_string, **json_kwargs):

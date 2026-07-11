@@ -347,6 +347,9 @@ are valid config *leaf values*, but that will *not* create a subtree from the di
 ## Some more misc notes
 
 - The `FinalConfig` has a nice pretty printer when cast to string or printed.
+  Fields that were set from `argv` are annotated with `(argv)` — or with
+  `(argv, as string)` when the value was taken as a literal string — so a
+  glance at the printed config shows what the CLI changed and how it was read.
 - When a dict is assigned to a `Config` field, it's turned into a `Config`.
 - Assigning a value to a group replaces its subtree (e.g. `c.model = "vit"` clears
   all `c.model.*`), and assigning a dict to a leaf replaces the leaf with a group.
@@ -378,7 +381,6 @@ python -m pytest
 Probably overkill:
 - Auto-generate a commandline --help?
 - Auto-generate a terminal UI to browse/change config values on `finalize()` could be fun.
-- Keep track of which fields are affected by arg overwrites, and note that in pretty-print?
 
 # Lore
 
