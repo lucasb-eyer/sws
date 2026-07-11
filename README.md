@@ -127,15 +127,21 @@ c = c.finalize(["width=512", "depth=2+2"])
 # In real life, you'd probably pass sys.argv[1:] instead.
 ```
 
-Only the syntax `a=b` is supported (not `a b` or `--a b`), any argument without `=` is ignored.
+Only the syntax `a=b` is supported (not `a b` or `--a b`), any argument without `=`
+is ignored by `finalize` (it is returned as unused when you pass
+`return_unused_argv=True`). Note that `sws.run`, described below, is stricter: it
+raises on such leftover arguments unless you use `forward_extras=True`.
 This is to reduce ambiguity and allow catching typos.
 
 The values of the overrides are parsed as Python expressions using the `simpleeval`
 library. This makes a lot of Python code just work, for example you can write
-`model.vocab=[ord(c) for c in "hello"]` and it'll work. You can also access the
+`model.vocab=[i*i for i in range(10)]` and it'll work. You can also access the
 current config using the name `c`, so something like `'c.model.width=3 * c.model.depth'`
 works. Note that I quoted the whole thing, for two reasons: (1) to stop my shell
 from interpreting `*` as wildcard, and (2) because I used spaces.
+Expressions referencing `c` see the *final* config values, after *all* overrides
+are applied — including overrides that appear later in the argument list — so the
+result does not depend on the order of the arguments.
 After an override key is resolved and its value is evaluated, the value is assigned
 with the same shape rules as config construction: dicts create subtrees, leaves
 replace groups, and groups replace leaves.
