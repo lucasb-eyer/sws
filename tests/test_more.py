@@ -53,7 +53,7 @@ def test_finalize_overrides_do_not_mutate_builder():
 def test_failed_finalize_restores_builder_phase_and_store():
     c = sws.Config(lr=0.1)
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(sws.OverrideError):
         c.finalize(["unknown=1"])
 
     with pytest.raises(TypeError):
@@ -71,6 +71,20 @@ def test_failed_cycle_finalize_does_not_poison_retry():
 
     c.b = 1
     assert c.finalize().a == 1
+
+
+def test_lazy_failure_identifies_the_actual_failing_field():
+    c = sws.Config()
+    c.result = lambda: c.model.dim * 2
+    c.model.dim = lambda: "wide" + 1
+
+    with pytest.raises(
+        sws.FinalizeError, match="Failed to resolve lazy field 'model.dim'"
+    ) as exc_info:
+        c.finalize()
+
+    assert isinstance(exc_info.value.__cause__, TypeError)
+    assert "str" in str(exc_info.value.__cause__)
 
 
 def test_lazy_values_are_memoized_once_per_finalize():
@@ -237,8 +251,9 @@ def test_raising_lazy_does_not_fake_cycle():
     c.z = lambda: c.a * 2
     c.bad = lambda: 1 / 0
 
-    with pytest.raises(ZeroDivisionError):
+    with pytest.raises(sws.FinalizeError, match="lazy field 'bad'") as exc_info:
         c.finalize(["a=c.bad"])
+    assert isinstance(exc_info.value.__cause__, ZeroDivisionError)
 
 
 def test_overrides_boolean_and_list_eval():
@@ -308,8 +323,9 @@ def test_bare_callable_requires_fn_or_zero_arg():
     # Assigning a bare callable will be treated as lazy and invoked at finalize,
     # which fails if it requires arguments.
     c.bad = needs_arg
-    with pytest.raises(TypeError):
+    with pytest.raises(sws.FinalizeError, match="lazy field 'bad'") as exc_info:
         c.finalize()
+    assert isinstance(exc_info.value.__cause__, TypeError)
 
 
 def test_fn_prevents_eager_execution_of_zero_arg_callable():

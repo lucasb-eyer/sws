@@ -20,6 +20,10 @@ class LazySubtreeError(FinalizeError):
     pass
 
 
+class OverrideError(FinalizeError):
+    pass
+
+
 class MissingKeyError(KeyError, AttributeError):
     """A missing config path that should behave like both key and attr lookup."""
     pass
@@ -262,6 +266,12 @@ class Config(_BaseView):
                 if self._cycle.count(full) > 1:  # Oops, we have a cycle!
                     raise CycleError(f"Cycle detected: {' -> '.join(self._cycle)}")
                 resolved = val()
+            except (FinalizeError, KeyError):
+                raise
+            except Exception as error:
+                raise FinalizeError(
+                    f"Failed to resolve lazy field {full!r}"
+                ) from error
             finally:
                 self._cycle.pop()
             self._resolved[full] = resolved
@@ -320,7 +330,7 @@ class Config(_BaseView):
                 msg += "':=' requires an explicit dotted path with non-empty segments and "
                 msg += "does not support wildcard prefixes like '..' or '...'. "
                 msg += f"Use '=' for wildcard matching, for example {raw_key}=VALUE."
-                raise AttributeError(msg)
+                raise OverrideError(msg)
             return key
 
         def _lazy_leaf_ancestor(key_suffix):
@@ -399,7 +409,7 @@ class Config(_BaseView):
                 msg = f"Unknown override key {unknown_suffix!r}"
                 if suggestions:
                     msg += "; did you mean:\n" + "\n".join(suggestions)
-                raise AttributeError(msg)
+                raise OverrideError(msg)
 
             def _segment_suffix_match(candidates, key_suffix):
                 return [k for k in candidates if ("." + k).endswith("." + key_suffix)]
@@ -422,12 +432,12 @@ class Config(_BaseView):
                     msg += (f"\nHint: use 'c.{suffix}=VALUE' to target that exact key, "
                             f"'..{suffix}=VALUE' to target all key with that suffix, and "
                             f"hence '...{suffix}=VALUE' to target all keys with that exact name.")
-                raise AttributeError(msg)
+                raise OverrideError(msg)
 
             if wildcard:
                 if suffix in {"", "."}:
-                    raise AttributeError("Invalid wildcard override key '..'; "
-                                         "expected '..suffix=VALUE'.")
+                    raise OverrideError("Invalid wildcard override key '..'; "
+                                        "expected '..suffix=VALUE'.")
 
                 targets = _prune_descendant_targets(
                     _raw_suffix_match(self._store, suffix)

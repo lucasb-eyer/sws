@@ -6,6 +6,7 @@ from .config import (
     FinalizeError,
     CycleError,
     LazySubtreeError,
+    OverrideError,
     from_json,
     from_flat_json,
 )

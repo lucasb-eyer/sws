@@ -29,13 +29,13 @@ def test_suffix():
     assert c.finalize(["simple=99"]).simple == 99
     assert c.finalize(["voc=99"]).model.head.params.voc == 99
 
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["ple=99"])
     msg = str(e.value)
     assert "ple" in msg
     assert "simple" in msg
 
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["lrr=10"])
     msg = str(e.value)
     assert "model.head.lr" in msg
@@ -45,7 +45,7 @@ def test_suffix():
     assert f.thingy.lr == 0.1
     assert f.model.head.lr == 99
 
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["lr=10"])
     msg = str(e.value)
     assert "model.head.lr" in msg
@@ -57,7 +57,7 @@ def test_suffix_leaf_and_group_matches_are_ambiguous():
     c.a.size = 1
     c.b.size.w = 2
 
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["size=9"])
 
     msg = str(e.value)
@@ -71,7 +71,7 @@ def test_suffix_top_level_leaf_and_nested_group_are_ambiguous():
     c.size = 1
     c.model.size.w = 2
 
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["size=9"])
 
     msg = str(e.value)
@@ -198,15 +198,17 @@ def test_user_lazy_returning_dict_stays_dict_leaf():
 
 def test_overrides_inexistent():
     c = Config(lr=0.1, model=dict(width=128, depth=4))
-    with pytest.raises(AttributeError):
+    with pytest.raises(sws.OverrideError) as exc_info:
         c.finalize(["lol=0.001"])
-    with pytest.raises(AttributeError):
+    assert isinstance(exc_info.value, sws.FinalizeError)
+    assert not isinstance(exc_info.value, AttributeError)
+    with pytest.raises(sws.OverrideError):
         c.finalize(["model.expand=2"])
 
 
 def test_overrides_suggestion():
     c = Config(lr=0.1, model=dict(width=128, depth=4))
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["model.widht=64"])
     assert "model.width" in str(e.value)
 
@@ -269,7 +271,7 @@ def test_create_or_set_with_walrus_rejects_wildcards_and_empty_segments():
 
     bad_keys = ["..foo.bar", "...foo.bar", ".foo", "foo..bar", "foo."]
     for key in bad_keys:
-        with pytest.raises(AttributeError) as e:
+        with pytest.raises(sws.OverrideError) as e:
             c.finalize([f"{key}:=3"])
         msg = str(e.value)
         assert f"Invalid exact override key '{key}'" in msg
@@ -291,7 +293,7 @@ def test_override_prefers_exact_key_when_using_c_prefix():
     c = Config()
     c.foo = 1
     c.bar.baz.foo = 2
-    with pytest.raises(AttributeError):
+    with pytest.raises(sws.OverrideError):
         c.finalize(["foo=32"])
 
     f = c.finalize(["c.foo=32"])
@@ -304,7 +306,7 @@ def test_c_prefix_rejects_nonexistent_path_instead_of_suffix_matching(override):
     c = Config()
     c.model.head.foo = 1
 
-    with pytest.raises(AttributeError, match="Unknown override key"):
+    with pytest.raises(sws.OverrideError, match="Unknown override key"):
         c.finalize([override])
 
     assert c.finalize().model.head.foo == 1
@@ -401,14 +403,14 @@ def test_override_wildcard_group_root_suppresses_descendant_matches():
 
 def test_override_wildcard_requires_non_empty_suffix():
     c = Config(lr=0.1)
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["..=32"])
     assert "Invalid wildcard override key" in str(e.value)
 
 
 def test_override_wildcard_unknown_suffix():
     c = Config(model=dict(width=128, depth=4))
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(sws.OverrideError) as e:
         c.finalize(["..eagerness=32"])
     assert "Unknown override key 'eagerness'" in str(e.value)
 

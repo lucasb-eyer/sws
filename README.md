@@ -142,6 +142,8 @@ across the _whole_ config (i.e. all nesting levels).
 For example, `model.head.lr` can be shortened to `head.lr` or `lr` if unambiguous.
 In the case of ambiguity, `sws` errs on the cautious side and errors out.
 You can always specify the full name starting with `c.` to be perfectly unambiguous.
+Invalid, unknown, and ambiguous override keys raise `sws.OverrideError`, a subclass
+of `sws.FinalizeError`.
 
 If there's a name that you use many times, and you'd like to set _all_ matching keys
 to a specific value, use the wildcard prefix syntax `..name=value`.
@@ -319,6 +321,8 @@ are valid config *leaf values*, but that will *not* create a subtree from the di
 - Assigning a value to a group replaces its subtree (e.g. `c.model = "vit"` clears
   all `c.model.*`), and assigning a dict to a leaf replaces the leaf with a group.
 - Cycles in computed callables are detected and raise an exception at `finalize`.
+- Other exceptions raised by a lazy value are wrapped in `sws.FinalizeError` with
+  the failing field's name; the original exception is available as `__cause__`.
 - The `FinalConfig` has a `.to_json()` and `.to_flat_json()` utils that return a
   string that's the json serialized config, but with non-json-serializable values
   replaced by an explanatory string. It's for logging/storing of configs for humans.

@@ -55,7 +55,7 @@ def test_run_unknown_key_raises():
         return final, unused
 
     import pytest
-    with pytest.raises(AttributeError):
+    with pytest.raises(sws.OverrideError):
         _call_run([
             "--config", cfg_path,
             "foo=unknown",  # not a known key; should raise
