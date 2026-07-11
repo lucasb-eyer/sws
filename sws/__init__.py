@@ -38,9 +38,11 @@ def run(main, *, argv=None, config_flag="--config", default_func="get_config", f
     consumed = set()
     for i, tok in enumerate(args):
         if tok == config_flag:
-            if i + 1 < len(args):
-                cfg_path = args[i + 1]
-                consumed.update({i, i + 1})
+            if i + 1 >= len(args):
+                raise ValueError(f"Missing value for {config_flag}: "
+                                 f"expected {config_flag} path.py[:func].")
+            cfg_path = args[i + 1]
+            consumed.update({i, i + 1})
             break
         if tok.startswith(config_flag + "="):
             cfg_path = tok.split("=", 1)[1]
@@ -51,8 +53,11 @@ def run(main, *, argv=None, config_flag="--config", default_func="get_config", f
     args = [tok for i, tok in enumerate(args) if i not in consumed]
 
     if cfg_path:
-        if ":" in cfg_path:
-            cfg_path, func_name = cfg_path.split(":", 1)
+        # Only treat the last colon-part as a function name if it looks like
+        # one; this keeps Windows drive letters (C:\...) working as paths.
+        head, sep, tail = cfg_path.rpartition(":")
+        if sep and tail.isidentifier():
+            cfg_path, func_name = head, tail
         # Resolve path relative to CWD
         cfg_path = _os.path.abspath(cfg_path)
         factory = _runpy.run_path(cfg_path).get(func_name)

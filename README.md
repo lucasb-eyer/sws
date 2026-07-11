@@ -222,6 +222,11 @@ In a real codebase, you'd have quite a few config files, maybe in some structure
 There's three more things `sws.run` does for convenience:
 - If no `--config` is passed, it looks for the `get_config` function in the file
   which called it. This is very convenient for quick small scripts.
+  Two caveats: the file is re-executed to find that function, so all of its
+  top-level code runs a second time (keep side effects under the
+  `if __name__ == "__main__":` guard); and "the file which called it" is the
+  direct caller, so if you wrap `sws.run` in a helper function of your own,
+  it will look in your helper's file instead — pass `--config` explicitly then.
 - If you use `run(fn, forward_extras=True)`, then all unused commandline arguments,
   i.e. all those without a `=`, are passed in a list as the second argument to `fn`.
   This can be used to do further custom processing unrelated to `sws`.

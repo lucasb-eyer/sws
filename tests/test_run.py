@@ -88,6 +88,35 @@ def test_run_default_loads_caller_script(tmp_path):
     assert "unused=pos" in out[1]
 
 
+def test_run_bare_trailing_config_flag_raises():
+    import pytest
+
+    def main(final, unused):
+        raise AssertionError("main should not be called")
+
+    with pytest.raises(ValueError, match="Missing value for --config"):
+        _call_run(["lr=0.2", "--config"], main)
+
+
+def test_run_config_path_may_contain_colons(tmp_path):
+    # Only a trailing identifier is a function name; colons that are part of
+    # the path (e.g. Windows drive letters) must not be split on.
+    cfg = tmp_path / "my:cfg.py"
+    cfg.write_text(
+        "from sws import Config\n"
+        "def get_config():\n"
+        "    return Config(lr=0.5)\n"
+        "def other():\n"
+        "    return Config(lr=0.9)\n"
+    )
+
+    def main(final, unused):
+        return final
+
+    assert _call_run(["--config", str(cfg)], main).lr == 0.5
+    assert _call_run(["--config", f"{cfg}:other"], main).lr == 0.9
+
+
 def test_run_raises_on_unused_extras_when_not_forwarding():
     import pytest
 
