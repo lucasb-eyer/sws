@@ -51,6 +51,9 @@ This *finalization* step can also integrate overrides from, for example,
 commandline arguments; more on that a little later.
 You can call `finalize(argv)` repeatedly; each call starts from the builder's original values.
 Finalization state is isolated per call, so calls on the same builder may also run concurrently.
+Container graphs in each result are defensively copied: they remain ordinary Python values,
+but mutating those containers cannot affect the builder or another finalization result.
+Opaque non-container values retain their identity.
 
 If you want to make one field's value depend on another field's value, you can
 do so by wrapping the value in a `lambda`, which computes the derived value.

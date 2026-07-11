@@ -50,6 +50,35 @@ def test_finalize_overrides_do_not_mutate_builder():
     assert original.wd == 0.05
 
 
+def test_finalized_containers_do_not_mutate_builder_or_later_finalizations():
+    original = [{"values": [1]}, {1}]
+    c = sws.Config(xs=original)
+
+    first = c.finalize()
+    first.xs[0]["values"].append(2)
+    first.xs[1].add(2)
+
+    second = c.finalize()
+    assert second.xs == [{"values": [1]}, {1}]
+    assert original == [{"values": [1]}, {1}]
+
+    original.append({"later": True})
+    assert first.xs == [{"values": [1, 2]}, {1, 2}]
+    assert second.xs == [{"values": [1]}, {1}]
+
+
+def test_finalization_preserves_leaf_identity_and_container_aliases():
+    marker = object()
+    shared = [marker]
+    c = sws.Config(first=shared, second=shared)
+
+    final = c.finalize()
+
+    assert final.first is final.second
+    assert final.first is not shared
+    assert final.first[0] is marker
+
+
 def test_failed_finalize_restores_builder_phase_and_store():
     c = sws.Config(lr=0.1)
 

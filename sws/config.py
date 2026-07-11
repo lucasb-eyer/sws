@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from contextvars import ContextVar
-from copy import copy
+from copy import copy, deepcopy
 import difflib
 import json
 import os
@@ -107,6 +107,36 @@ def _flatten(base, value):
             yield from _flatten(fk, v)
     else:
         yield base, value
+
+
+def _copy_container_graph(value):
+    """Recursively copy containers while retaining opaque leaf-object identity."""
+    container_types = (Mapping, list, tuple, set, frozenset)
+    memo = {}
+    seen = set()
+
+    def preserve_leaf_objects(item):
+        item_id = id(item)
+        if item_id in seen:
+            return
+        seen.add(item_id)
+
+        if isinstance(item, Mapping):
+            for key, child in item.items():
+                preserve_leaf_objects(key)
+                preserve_leaf_objects(child)
+        elif isinstance(item, (list, tuple, set, frozenset)):
+            for child in item:
+                preserve_leaf_objects(child)
+        else:
+            # Configs may intentionally contain opaque objects. Detach the
+            # surrounding containers without cloning those objects themselves.
+            memo[item_id] = item
+
+    if not isinstance(value, container_types):
+        return value
+    preserve_leaf_objects(value)
+    return deepcopy(value, memo)
 
 
 def _export_value(value):
@@ -530,7 +560,7 @@ class Config(_BaseView):
             _flatten_final_value(key, key, value, [])
 
         final = FinalConfig(
-            _store=finalized_store,
+            _store=_copy_container_graph(finalized_store),
             _prefix=self._prefix
         )
 
