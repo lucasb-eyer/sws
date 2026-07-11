@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
 import pytest
 import sws
 
@@ -68,6 +71,80 @@ def test_failed_cycle_finalize_does_not_poison_retry():
 
     c.b = 1
     assert c.finalize().a == 1
+
+
+def test_lazy_values_are_memoized_once_per_finalize():
+    calls = 0
+    c = sws.Config()
+
+    def value():
+        nonlocal calls
+        calls += 1
+        return calls
+
+    # Define the dependent field first so resolving it has to resolve value.
+    c.total = lambda: c.value + c.value
+    c.value = value
+
+    first = c.finalize()
+    assert first.total == 2
+    assert first.value == 1
+    assert calls == 1
+
+    second = c.finalize()
+    assert second.total == 4
+    assert second.value == 2
+    assert calls == 2
+
+
+def test_lazy_memoization_prevents_exponential_dependency_resolution():
+    calls = 0
+    c = sws.Config(x0=1)
+
+    def make_double(previous):
+        def double():
+            nonlocal calls
+            calls += 1
+            return c[previous] + c[previous]
+        return double
+
+    for i in range(1, 19):
+        c[f"x{i}"] = make_double(f"x{i - 1}")
+
+    final = c.finalize()
+    assert final.x18 == 2 ** 18
+    assert calls == 18
+
+
+def test_concurrent_finalizations_use_isolated_store_and_resolution_state():
+    barrier = threading.Barrier(2)
+    overlap = threading.Event()
+    overlap.set()
+
+    c = sws.Config()
+
+    def slow_value():
+        if overlap.is_set():
+            barrier.wait(timeout=2)
+        return c.value
+
+    # Put the synchronizing lazy first so both finalizations overlap before
+    # resolving their differently overridden values.
+    c.slow = slow_value
+    c.value = 0
+
+    def finalize(value):
+        final = c.finalize([f"value={value}"])
+        return final.value, final.slow
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(finalize, [1, 2]))
+
+    assert results == [(1, 1), (2, 2)]
+
+    overlap.clear()
+    original = c.finalize()
+    assert (original.value, original.slow) == (0, 0)
 
 
 def test_captured_subtree_view_sees_temporary_overrides():

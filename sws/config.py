@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from contextvars import ContextVar
 from copy import copy
 import difflib
 import json
@@ -117,25 +118,32 @@ class Config(_BaseView):
     """
 
     @property
+    def _store(self):
+        context = self._finalize_context.get()
+        return self._base_store if context is None else context[0]
+
+    @property
+    def _state(self):
+        context = self._finalize_context.get()
+        return self._base_state if context is None else context[1]
+
+    @property
     def _phase(self):
         return self._state["phase"]
-
-    @_phase.setter
-    def _phase(self, value):
-        self._state["phase"] = value
 
     @property
     def _cycle(self):
         return self._state["cycle"]
 
-    @_cycle.setter
-    def _cycle(self, value):
-        self._state["cycle"] = value
+    @property
+    def _resolved(self):
+        return self._state["resolved"]
 
     def __init__(self, **kw):
-        self._store = {}
+        self._finalize_context = ContextVar("sws_finalize_context", default=None)
+        self._base_store = {}
+        self._base_state = {"phase": "building", "cycle": [], "resolved": {}}
         self._prefix = ""
-        self._state = {"phase": "building", "cycle": []}
         self._assign(None, kw)  # Init from kw's.
 
     def _with_prefix(self, prefix):
@@ -203,7 +211,11 @@ class Config(_BaseView):
             if not callable(val):
                 return val
 
-            # val is callable, so it was a lazy. Resolve it, but careful of cycles.
+            # val is callable, so it was a lazy. Resolve it once per finalization,
+            # but careful of cycles.
+            if full in self._resolved:
+                return self._resolved[full]
+
             # Pop in a finally: if val() raises and the error is caught (e.g. by
             # argv override parsing), a stale entry would make a later resolution
             # of this key look like a cycle.
@@ -211,9 +223,11 @@ class Config(_BaseView):
             try:
                 if self._cycle.count(full) > 1:  # Oops, we have a cycle!
                     raise CycleError(f"Cycle detected: {' -> '.join(self._cycle)}")
-                return val()
+                resolved = val()
             finally:
                 self._cycle.pop()
+            self._resolved[full] = resolved
+            return resolved
         else:
             assert False, f"Internal bug: {self._phase}"
 
@@ -234,19 +248,16 @@ class Config(_BaseView):
         if self._prefix:
             raise ValueError("Call `finalize` on the top-level config.")
 
-        original_store = dict(self._store)
-        original_phase = self._phase
-        original_cycle = self._cycle
-        self._cycle = []
+        context = (
+            dict(self._base_store),
+            {"phase": "finalize", "cycle": [], "resolved": {}},
+        )
+        token = self._finalize_context.set(context)
 
         try:
-            self._phase = "finalize"
             return self._finalize_current_store(argv, return_unused_argv)
         finally:
-            self._store.clear()
-            self._store.update(original_store)
-            self._phase = original_phase
-            self._cycle = original_cycle
+            self._finalize_context.reset(token)
 
     def _finalize_current_store(self, argv=None, return_unused_argv=False):
         # Apply overrides if provided. Support `key=value` for existing keys

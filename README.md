@@ -50,6 +50,7 @@ read-only `FinalConfig` object that contains "final" values for all fields.
 This *finalization* step can also integrate overrides from, for example,
 commandline arguments; more on that a little later.
 You can call `finalize(argv)` repeatedly; each call starts from the builder's original values.
+Finalization state is isolated per call, so calls on the same builder may also run concurrently.
 
 If you want to make one field's value depend on another field's value, you can
 do so by wrapping the value in a `lambda`, which computes the derived value.
@@ -57,6 +58,8 @@ This lambda will be called during finalization, where concrete config values
 can be accessed. In this way, in the example above, the `wd` setting will use
 the correct value of `c.lr` even when it is overridden by commandline arguments
 during `finalize`. This works transitively, just as you'd expect it to.
+Each lazy field is evaluated at most once per call to `finalize`; repeated
+dependency reads reuse that field's resolved value.
 
 Since callable values receive this special treatment, if you want to actually
 set a config field's value to an actual function, that needs to be wrapped by
