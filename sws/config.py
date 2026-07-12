@@ -35,6 +35,13 @@ class Fn:
     def __init__(self, fn):
         self.fn = fn
 
+    def __deepcopy__(self, memo):
+        # Finalization deep-copies the complete container graph. Treat an Fn
+        # marker as its wrapped value there, letting deepcopy handle cycles,
+        # aliases, and container subclasses for us.
+        memo[id(self)] = self.fn
+        return self.fn
+
 
 def _reusable_subtree_hint():
     return (
@@ -122,6 +129,9 @@ def _copy_container_graph(value):
             return
         seen.add(item_id)
 
+        if isinstance(item, Fn):
+            # Do not preserve the marker itself: Fn.__deepcopy__ unwraps it.
+            return
         if isinstance(item, Mapping):
             for key, child in item.items():
                 preserve_leaf_objects(key)
@@ -138,37 +148,6 @@ def _copy_container_graph(value):
         return value
     preserve_leaf_objects(value)
     return deepcopy(value, memo)
-
-
-def _unwrap_fns(value, memo):
-    """Recursively unwrap Fn markers inside containers at the finalize boundary.
-
-    Containers holding no Fn are returned as-is, so leaf identity, aliasing,
-    and Mapping subclasses are preserved unless an Fn forces a rebuild.
-    """
-    if isinstance(value, Fn):
-        return value.fn
-    if id(value) in memo:
-        return memo[id(value)]
-    if isinstance(value, Mapping):
-        new = {k: _unwrap_fns(v, memo) for k, v in value.items()}
-        changed = any(a is not b for a, b in zip(new.values(), value.values()))
-    elif isinstance(value, (list, tuple, set, frozenset)):
-        items = [_unwrap_fns(v, memo) for v in value]
-        changed = any(a is not b for a, b in zip(items, value))
-        if isinstance(value, list):
-            new = items
-        elif isinstance(value, tuple):
-            new = tuple(items)
-        elif isinstance(value, set):
-            new = set(items)
-        else:
-            new = frozenset(items)
-    else:
-        return value
-    result = new if changed else value
-    memo[id(value)] = result
-    return result
 
 
 def _export_value(value):
@@ -605,7 +584,6 @@ class Config(_BaseView):
         # Now go over all items and resolve those that were lazy.
         resolved_store = {k: self[k] for k in self._store}
         finalized_store = {}
-        unwrap_memo = {}  # Shared so containers aliased across keys stay aliased.
         argv_provenance = {}
 
         def _record(dest_key, source_key, value):
@@ -659,7 +637,7 @@ class Config(_BaseView):
                     _record(child_dest, source_key, child_val)
                 return
 
-            _record(dest_key, source_key, _unwrap_fns(value, unwrap_memo))
+            _record(dest_key, source_key, value)
 
         for key, value in resolved_store.items():
             _flatten_final_value(key, key, value, [])

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
@@ -358,6 +359,32 @@ def test_fn_unwrapped_inside_containers():
     assert final.callbacks[0] is f
     assert final.callbacks[1][0] is g
     assert final.by_name["f"] is f
+
+
+def test_fn_unwrapping_preserves_cycles_aliases_and_mapping_subclasses():
+    def callback():
+        return 1
+
+    plain_cycle = []
+    plain_cycle.append(plain_cycle)
+    fn_cycle = [sws.Fn(callback)]
+    fn_cycle.append(fn_cycle)
+    by_name = defaultdict(list, callback=sws.Fn(callback))
+
+    c = sws.Config()
+    c.plain_cycle = plain_cycle
+    c.fn_cycle = fn_cycle
+    c.fn_cycle_alias = fn_cycle
+    c.by_name = lambda: by_name
+    final = c.finalize()
+
+    assert final.plain_cycle[0] is final.plain_cycle
+    assert final.fn_cycle[0] is callback
+    assert final.fn_cycle[1] is final.fn_cycle
+    assert final.fn_cycle_alias is final.fn_cycle
+    assert isinstance(final.by_name, defaultdict)
+    assert final.by_name.default_factory is list
+    assert final.by_name["callback"] is callback
 
 
 def test_bare_callable_requires_fn_or_zero_arg():
