@@ -432,3 +432,53 @@ def test_iterate_config_view():
 
     assert sorted(c) == ["foo"]
     assert sorted(c.foo) == ["a", "b"]
+
+
+def test_iterate_config_view_while_populating_another_subtree():
+    c = sws.Config()
+    c.foo = {"a": 1, "b": 2}
+
+    for k in c.foo:
+        c.bar[k] = 100
+
+    assert c.finalize().to_dict() == {
+        "foo": {"a": 1, "b": 2},
+        "bar": {"a": 100, "b": 100},
+    }
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_config_iteration_snapshots_names_when_iterator_is_created(nested):
+    c = sws.Config()
+    view = c.foo if nested else c
+    view.a = 1
+    view.b = {"x": 2, "y": 3}
+    if nested:
+        c.foobar.outside = 4
+
+    names = iter(view)
+    del view["a"]
+    view.new = 5
+
+    assert list(names) == ["a", "b"]
+    assert list(view) == ["b", "new"]
+
+
+def test_config_iteration_allows_mutating_the_iterated_subtree():
+    c = sws.Config()
+    c.foo = {"a": 1, "b": 2}
+    # Enumerating names must not evaluate lazy values.
+    c.foo.lazy = lambda: 1 / 0
+    visited = []
+
+    for k in c.foo:
+        visited.append(k)
+        del c.foo[k]
+        c.foo[k + "_new"] = 100
+
+    assert visited == ["a", "b", "lazy"]
+    assert c.finalize().foo.to_dict() == {
+        "a_new": 100, "b_new": 100, "lazy_new": 100,
+    }
+    with pytest.raises(TypeError, match="write-only"):
+        _ = c.foo.a_new

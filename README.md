@@ -108,6 +108,16 @@ to leave as many names as possible free to be used for configs. For instance, `k
 This also means, that it doesn't implement the `Mapping` protocol and can't be `**`'ed.
 So, just call `to_dict`, it's fine.
 
+You can, however, iterate over the immediate child names of a `Config` or `FinalConfig`,
+including subtree views. This reads names only, so it works during construction:
+
+```python
+c = Config()
+c.foo = {"a": 1, "b": 2}
+for k in c.foo:
+    c.bar[k] = 100
+```
+
 You don't really need to know this, but internally, the full config is stored as a flat dict
 (`"model.emb_lr"` is a key), and subfields are just prefix-views into that dict.
 

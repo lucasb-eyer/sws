@@ -331,6 +331,10 @@ class Config(_BaseView):
         for k in to_del:
             del self._store[k]
 
+    def __iter__(self):
+        # Snapshot child names so writes to the shared store cannot affect a loop.
+        return iter(tuple(self._iter_child_segments()))
+
     # Finalization to an immutable, resolved config
     def finalize(self, argv=None, return_unused_argv=False):
         """Resolve a write-only builder into an immutable, fully-evaluated config."""
